@@ -119,6 +119,15 @@ config VIDEO_S3C_CAMIF
 	  To compile this driver as a module, choose M here: the module
 	  will be called s3c-camif.
 
+config VIDEO_IMX_IPUV3_CSI
+	tristate "i.MX51/53 Camera Sensor Interface driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3 && MEDIA_CONTROLLER
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	select VIDEO_IMX_IPUV3
+	---help---
+	  This is a v4l2 driver for the i.MX51/53 Camera Sensor Interface
+
 source "drivers/media/platform/soc_camera/Kconfig"
 source "drivers/media/platform/exynos4-is/Kconfig"
 source "drivers/media/platform/s5p-tv/Kconfig"
