@@ -213,6 +213,16 @@ config VIDEO_IMX_IPU_OVL
 	---help---
 	  This is a v4l2 overlay video driver for the i.MX51/53.
 
+config VIDEO_IMX_IPU_VOUT
+	tristate "i.MX51/53 IPUv3 based video output driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3
+	select V4L2_MEM2MEM_DEV
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	---help---
+	  This is a v4l2 video output driver rendering on the base framebuffer
+	  of the IPUV3.
+
 config VIDEO_IMX_IPU_SCALER
 	tristate "i.MX51/53 IPUv3 based image scaler driver"
 	depends on VIDEO_DEV && DRM_IMX_IPUV3
