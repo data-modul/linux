@@ -26,6 +26,7 @@ obj-$(CONFIG_VIDEO_CODA) 		+= coda.o
 obj-$(CONFIG_VIDEO_IMX_IPU_COMMON)	+= imx-ipu.o
 obj-$(CONFIG_VIDEO_IMX_IPU_OVL)		+= imx-ipu-ovl.o
 obj-$(CONFIG_VIDEO_IMX_IPU_SCALER)	+= imx-ipu-scaler.o
+obj-$(CONFIG_VIDEO_IMX_IPU_VDIC)	+= imx-ipu-vdic.o
 
 obj-$(CONFIG_VIDEO_SH_VEU)		+= sh_veu.o
 

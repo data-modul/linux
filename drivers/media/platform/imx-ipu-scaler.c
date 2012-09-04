@@ -73,7 +73,7 @@ struct ipu_scale_dev {
 /* Per-queue, driver-specific private data */
 struct ipu_scale_q_data {
 	struct v4l2_pix_format	cur_fmt;
-	struct v4l2_rect	crop;
+	struct v4l2_rect	rect;
 };
 
 struct ipu_scale_ctx {
@@ -83,7 +83,10 @@ struct ipu_scale_ctx {
 	struct vb2_alloc_ctx	*alloc_ctx;
 	struct ipu_scale_q_data	q_data[2];
 	struct mutex		lock;
+	struct work_struct	work;
+	struct completion	completion;
 	struct work_struct	skip_run;
+	int			error;
 };
 
 static struct ipu_scale_q_data *get_q_data(struct ipu_scale_ctx *ctx, enum v4l2_buf_type type)
@@ -127,8 +130,6 @@ static void ipu_complete(void *priv, int err)
 {
 	struct ipu_scale_dev *ipu_scaler = priv;
 	struct ipu_scale_ctx *curr_ctx;
-	struct vb2_buffer *src_vb, *dst_vb;
-	unsigned long flags;
 
 	curr_ctx = v4l2_m2m_get_curr_priv(ipu_scaler->m2m_dev);
 
@@ -138,31 +139,27 @@ static void ipu_complete(void *priv, int err)
 		return;
 	}
 
-	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->m2m_ctx);
-	dst_vb = v4l2_m2m_dst_buf_remove(curr_ctx->m2m_ctx);
-
-	dst_vb->v4l2_buf.timestamp = src_vb->v4l2_buf.timestamp;
-	dst_vb->v4l2_buf.timecode = src_vb->v4l2_buf.timecode;
-
-	spin_lock_irqsave(&ipu_scaler->irqlock, flags);
-	v4l2_m2m_buf_done(src_vb, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
-	v4l2_m2m_buf_done(dst_vb, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
-	spin_unlock_irqrestore(&ipu_scaler->irqlock, flags);
-
-	mutex_unlock(&curr_ctx->lock);
-
-	v4l2_m2m_job_finish(ipu_scaler->m2m_dev, curr_ctx->m2m_ctx);
+	curr_ctx->error = err;
+	complete(&curr_ctx->completion);
 }
 
 static void device_run(void *priv)
 {
 	struct ipu_scale_ctx *ctx = priv;
+
+	schedule_work(&ctx->work);
+}
+
+static void ipu_scaler_work(struct work_struct *work)
+{
+	struct ipu_scale_ctx *ctx = container_of(work, struct ipu_scale_ctx, work);
 	struct ipu_scale_dev *ipu_scaler = ctx->ipu_scaler;
 	struct vb2_buffer *src_buf, *dst_buf;
-	struct ipu_image in, out;
 	struct ipu_scale_q_data *q_data;
 	struct v4l2_pix_format *pix;
-	struct v4l2_rect *c;
+	struct ipu_image in, out;
+	int err = -ETIMEDOUT;
+	unsigned long flags;
 
 	mutex_lock(&ctx->lock);
 
@@ -183,16 +180,12 @@ static void device_run(void *priv)
 
 	q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
 	pix = &q_data->cur_fmt;
-	c = &q_data->crop;
 
 	in.pix.width = pix->width;
 	in.pix.height = pix->height;
 	in.pix.bytesperline = pix->bytesperline;
 	in.pix.pixelformat = pix->pixelformat;
-	in.rect.left = 0;
-	in.rect.top = 0;
-	in.rect.width = pix->width;
-	in.rect.height = pix->height;
+	in.rect = q_data->rect;
 	in.phys = vb2_dma_contig_plane_dma_addr(src_buf, 0);
 
 	q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
@@ -202,13 +195,34 @@ static void device_run(void *priv)
 	out.pix.height = pix->height;
 	out.pix.bytesperline = pix->bytesperline;
 	out.pix.pixelformat = pix->pixelformat;
-	out.rect.left = c->left;
-	out.rect.top = c->top;
-	out.rect.width = c->width;
-	out.rect.height = c->height;
+	out.rect = q_data->rect;
 	out.phys = vb2_dma_contig_plane_dma_addr(dst_buf, 0);
 
 	ipu_image_convert(ipu_scaler->ipu, &in, &out, ipu_complete, ipu_scaler);
+
+	if (!wait_for_completion_timeout(&ctx->completion,
+					 msecs_to_jiffies(300))) {
+		dev_err(ipu_scaler->dev,
+			"Timeout waiting for scaling result\n");
+		err = -ETIMEDOUT;
+	} else {
+		err = ctx->error;
+	}
+
+	src_buf = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
+	dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+
+	dst_buf->v4l2_buf.timestamp = src_buf->v4l2_buf.timestamp;
+	dst_buf->v4l2_buf.timecode = src_buf->v4l2_buf.timecode;
+
+	spin_lock_irqsave(&ipu_scaler->irqlock, flags);
+	v4l2_m2m_buf_done(src_buf, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
+	v4l2_m2m_buf_done(dst_buf, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
+	spin_unlock_irqrestore(&ipu_scaler->irqlock, flags);
+
+	mutex_unlock(&ctx->lock);
+
+	v4l2_m2m_job_finish(ipu_scaler->m2m_dev, ctx->m2m_ctx);
 }
 
 /*
@@ -228,33 +242,6 @@ static int vidioc_querycap(struct file *file, void *priv,
 	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
 			   V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING;
 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
-
-	return 0;
-}
-
-static int vidioc_cropcap(struct file *file, void *priv,
-		struct v4l2_cropcap *cropcap)
-{
-	struct ipu_scale_ctx *ctx = priv;
-	struct ipu_scale_q_data *q_data;
-	struct v4l2_pix_format *pix;
-
-	if (cropcap->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
-		return -EINVAL;
-
-	q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
-	pix = &q_data->cur_fmt;
-
-	cropcap->bounds.left = 0;
-	cropcap->bounds.top = 0;
-	cropcap->bounds.width = pix->width;
-	cropcap->bounds.height = pix->height;
-	cropcap->defrect.left = 0;
-	cropcap->defrect.top = 0;
-	cropcap->defrect.width = pix->width;
-	cropcap->defrect.height = pix->height;
-	cropcap->pixelaspect.numerator = 1;
-	cropcap->pixelaspect.denominator = 1;
 
 	return 0;
 }
@@ -337,66 +324,96 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	if (ret < 0)
 		return ret;
 
-	/* Reset cropping rectangle on the opposite side */
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-		struct ipu_scale_q_data *q_data_out;
+	/* Reset cropping/composing rectangle */
+	q_data->rect.left = 0;
+	q_data->rect.top = 0;
+	q_data->rect.width = q_data->cur_fmt.width;
+	q_data->rect.height = q_data->cur_fmt.height;
 
-		q_data_out = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
-		if (!q_data_out)
-			return -EINVAL;
+	return 0;
+}
 
-		q_data_out->crop.left = 0;
-		q_data_out->crop.top = 0;
-		q_data_out->crop.width = q_data->cur_fmt.width;
-		q_data_out->crop.height = q_data->cur_fmt.height;
+static int vidioc_g_selection(struct file *file, void *priv,
+			      struct v4l2_selection *s)
+{
+	struct ipu_scale_ctx *ctx = priv;
+	struct ipu_scale_q_data *q_data;
+
+	switch (s->target) {
+	case V4L2_SEL_TGT_CROP:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+		s->r.left = 0;
+		s->r.top = 0;
+		s->r.width = q_data->cur_fmt.width;
+		s->r.height = q_data->cur_fmt.height;
+		break;
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+		s->r.left = 0;
+		s->r.top = 0;
+		s->r.width = q_data->cur_fmt.width;
+		s->r.height = q_data->cur_fmt.height;
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		s->r = q_data->rect;
+		break;
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+	case V4L2_SEL_TGT_COMPOSE_PADDED:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		s->r.left = 0;
+		s->r.top = 0;
+		s->r.width = q_data->cur_fmt.width;
+		s->r.height = q_data->cur_fmt.height;
+		break;
 	}
 
 	return 0;
 }
 
-static int vidioc_g_crop(struct file *file, void *priv,
-			 struct v4l2_crop *crop)
+static int vidioc_s_selection(struct file *file, void *priv,
+			      struct v4l2_selection *s)
 {
 	struct ipu_scale_ctx *ctx = priv;
 	struct ipu_scale_q_data *q_data;
+	struct vb2_queue *vq;
 
-	q_data = get_q_data(ctx, crop->type);
-	if (!q_data)
+	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, s->type);
+	if (!vq)
 		return -EINVAL;
 
-	crop->c = q_data->crop;
-
-	return 0;
-}
-
-static int vidioc_s_crop(struct file *file, void *priv,
-				 const struct v4l2_crop *crop)
-{
-	struct ipu_scale_ctx *ctx = priv;
-	struct ipu_scale_q_data *q_data;
-	struct v4l2_pix_format *pix;
-
-	/* TODO: allow cropping of the input image */
-	if (crop->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
+	switch (s->target) {
+	case V4L2_SEL_TGT_CROP:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+		q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		break;
+	default:
 		return -EINVAL;
+	}
 
-	q_data = get_q_data(ctx, crop->type);
-	if (!q_data)
-		return -EINVAL;
+	/* The input's frame width to the IC must be a multiple of 8 pixels
+	 * When performing resizing the frame width must be multiple of burst
+	 * size - 8 or 16 pixels as defined by CB#_BURST_16 parameter.
+	 */
+	if (s->flags & V4L2_SEL_FLAG_GE)
+		s->r.width = round_up(s->r.width, 8);
+	if (s->flags & V4L2_SEL_FLAG_LE)
+		s->r.width = round_down(s->r.width, 8);
+	s->r.width = clamp_t(unsigned int, s->r.width, 8,
+			     round_down(q_data->cur_fmt.width, 8));
+	s->r.height = clamp_t(unsigned int, s->r.height, 1,
+			      q_data->cur_fmt.height);
+	s->r.left = clamp_t(unsigned int, s->r.left, 0,
+			    q_data->cur_fmt.width - s->r.width);
+	s->r.top = clamp_t(unsigned int, s->r.top, 0,
+			   q_data->cur_fmt.height - s->r.height);
 
-	pix = &q_data->cur_fmt;
-
-	q_data->crop = crop->c;
-
-	/* Do not allow to leave base framebuffer for now */
-	if (q_data->crop.left < 0)
-		q_data->crop.left = 0;
-	if (q_data->crop.top  < 0)
-		q_data->crop.top = 0;
-	if (q_data->crop.left + q_data->crop.width > pix->width)
-		q_data->crop.left = pix->width - q_data->crop.width;
-	if (q_data->crop.top + q_data->crop.height > pix->height)
-		q_data->crop.top = pix->height - q_data->crop.height;
+	/* V4L2_SEL_FLAG_KEEP_CONFIG is only valid for subdevices */
+	q_data->rect = s->r;
 
 	return 0;
 }
@@ -478,7 +495,6 @@ static int vidioc_enum_framesizes(struct file *file, void *fh,
 
 static const struct v4l2_ioctl_ops ipu_scale_ioctl_ops = {
 	.vidioc_querycap	= vidioc_querycap,
-	.vidioc_cropcap		= vidioc_cropcap,
 
 	.vidioc_enum_fmt_vid_cap = vidioc_enum_fmt_vid_cap,
 	.vidioc_g_fmt_vid_cap	= vidioc_g_fmt_vid_cap,
@@ -490,8 +506,8 @@ static const struct v4l2_ioctl_ops ipu_scale_ioctl_ops = {
 	.vidioc_try_fmt_vid_out	= vidioc_try_fmt_vid_out,
 	.vidioc_s_fmt_vid_out	= vidioc_s_fmt,
 
-	.vidioc_g_crop		= vidioc_g_crop,
-	.vidioc_s_crop		= vidioc_s_crop,
+	.vidioc_g_selection	= vidioc_g_selection,
+	.vidioc_s_selection	= vidioc_s_selection,
 
 	.vidioc_reqbufs		= vidioc_reqbufs,
 	.vidioc_querybuf	= vidioc_querybuf,
@@ -648,6 +664,8 @@ static int ipu_scale_open(struct file *file)
 		return -ENOMEM;
 
 	INIT_WORK(&ctx->skip_run, ipu_scale_skip_run);
+	INIT_WORK(&ctx->work, ipu_scaler_work);
+	init_completion(&ctx->completion);
 	file->private_data = ctx;
 	ctx->ipu_scaler = ipu_scaler;
 	mutex_init(&ctx->lock);
@@ -668,10 +686,10 @@ static int ipu_scale_open(struct file *file)
 		ctx->q_data[i].cur_fmt.pixelformat = V4L2_PIX_FMT_YUV420;
 		ctx->q_data[i].cur_fmt.sizeimage = width * height * 3 / 2;
 		ctx->q_data[i].cur_fmt.colorspace = V4L2_COLORSPACE_REC709;
-		ctx->q_data[i].crop.left = 0;
-		ctx->q_data[i].crop.top = 0;
-		ctx->q_data[i].crop.width = width;
-		ctx->q_data[i].crop.height = height;
+		ctx->q_data[i].rect.left = 0;
+		ctx->q_data[i].rect.top = 0;
+		ctx->q_data[i].rect.width = width;
+		ctx->q_data[i].rect.height = height;
 	}
 
 	atomic_inc(&ipu_scaler->num_inst);
