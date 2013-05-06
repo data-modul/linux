@@ -623,6 +623,15 @@ static int ipu_ovl_vidioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer 
 	return vb2_dqbuf(&vout->vidq, buf, file->f_flags & O_NONBLOCK);
 }
 
+static int ipu_ovl_vidioc_create_bufs(struct file*file, void *fh,
+				      struct v4l2_create_buffers *create)
+{
+	struct video_device *dev = video_devdata(file);
+	struct vout_data *vout = video_get_drvdata(dev);
+
+	return vb2_create_bufs(&vout->vidq, create);
+}
+
 static int ipu_ovl_vidioc_streamon(struct file *file, void *fh, enum v4l2_buf_type i)
 {
 	struct video_device *dev = video_devdata(file);
@@ -732,6 +741,7 @@ static const struct v4l2_ioctl_ops mxc_ioctl_ops = {
 	.vidioc_qbuf			= ipu_ovl_vidioc_qbuf,
 	.vidioc_expbuf			= ipu_ovl_vidioc_expbuf,
 	.vidioc_dqbuf			= ipu_ovl_vidioc_dqbuf,
+	.vidioc_create_bufs		= ipu_ovl_vidioc_create_bufs,
 	.vidioc_streamon		= ipu_ovl_vidioc_streamon,
 	.vidioc_streamoff		= ipu_ovl_vidioc_streamoff,
 #ifdef CONFIG_VIDEO_V4L1_COMPAT
