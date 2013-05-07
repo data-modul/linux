@@ -128,6 +128,11 @@ static inline void v4l2_subdev_notify(struct v4l2_subdev *sd,
 		sd->v4l2_dev->notify(sd, notification, arg);
 }
 
+/* Register a single device node for a subdev of a v4l2 device. */
+int __must_check
+v4l2_device_register_subdev_node(struct v4l2_device *v4l2_dev,
+				struct v4l2_subdev *sd);
+
 /* Iterate over all subdevs. */
 #define v4l2_device_for_each_subdev(sd, v4l2_dev)			\
 	list_for_each_entry(sd, &(v4l2_dev)->subdevs, list)
