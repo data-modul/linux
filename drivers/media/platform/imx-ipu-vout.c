@@ -700,6 +700,7 @@ static int mxc_v4l2out_open(struct file *file)
 	q->drv_priv = vout;
 	q->ops = &vout_videobuf_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
+	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->buf_struct_size = sizeof(struct vb2_buffer);
 
 	return vb2_queue_init(q);
