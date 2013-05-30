@@ -273,6 +273,15 @@ static inline void ipu_cpmem_set_buffer(struct ipu_ch_param __iomem *p,
 		ipu_ch_param_write_field(p, IPU_FIELD_EBA0, buf >> 3);
 }
 
+static inline dma_addr_t ipu_cpmem_get_buffer(struct ipu_ch_param __iomem *p,
+		int bufnum)
+{
+	if (bufnum)
+		return ipu_ch_param_read_field(p, IPU_FIELD_EBA1) << 3;
+	else
+		return ipu_ch_param_read_field(p, IPU_FIELD_EBA0) << 3;
+}
+
 static inline void ipu_cpmem_set_resolution(struct ipu_ch_param __iomem *p,
 		int xres, int yres)
 {
