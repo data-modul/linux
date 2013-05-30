@@ -42,10 +42,6 @@ static int usealpha;
 
 module_param(usealpha, int, 0);
 
-static int allow_dynamic_resize;
-
-module_param(allow_dynamic_resize, int, 0);
-
 struct vout_buffer {
 	struct vb2_buffer		vb;
 };
@@ -55,6 +51,7 @@ struct vout_buffer {
 enum {
 	VOUT_IDLE,
 	VOUT_STARTING,
+	VOUT_ENABLING,
 	VOUT_RUNNING,
 	VOUT_STOPPING,
 };
@@ -79,7 +76,6 @@ struct vout_data {
 
 	struct ipu_soc		*ipu;
 	struct ipuv3_channel	*ipu_ch;
-	struct dmfc_channel	*dmfc;
 	struct ipu_dp		*dp;
 
 	struct vb2_queue	vidq;
@@ -98,7 +94,7 @@ struct vout_data {
 	struct list_head	scale_list;
 	struct list_head	show_list;
 
-	struct vout_queue	*active, *done;
+	struct vout_queue	*showing, *next_showing;
 	int			width_base;
 	int			height_base;
 
@@ -294,6 +290,8 @@ static int vout_videobuf_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
+static int vout_enable(struct vout_queue *q);
+
 static irqreturn_t vout_handler(int irq, void *context)
 {
 	struct vout_data *vout = context;
@@ -302,32 +300,72 @@ static irqreturn_t vout_handler(int irq, void *context)
 	struct ipu_ch_param *cpmem = ipu_get_cpmem(vout->ipu_ch);
 	int current_active = ipu_idmac_get_current_buffer(vout->ipu_ch);
 
+	if (vout->status == VOUT_ENABLING) {
+		vout_enable(vout->next_showing);
+		vout->status = VOUT_RUNNING;
+		vout->next_showing = NULL;
+		return IRQ_HANDLED;
+	}
+
 	spin_lock_irqsave(&vout->lock, flags);
 
-	if (vout->status == VOUT_STOPPING)
+	if(vout->status == VOUT_IDLE)
 		goto out;
 
-	if (vout->done) {
-		vb2_buffer_done(vout->done->vb, VB2_BUF_STATE_DONE);
-		list_add_tail(&vout->done->list, &vout->idle_list);
-		vout->done = NULL;
+	if (vout->showing) {
+		/*
+		 * this could have already happened on EOF, but we
+		 * want to avoid another 60 interrupts per second.
+		 */
+		vb2_buffer_done(vout->showing->vb, VB2_BUF_STATE_DONE);
+		list_add_tail(&vout->showing->list, &vout->idle_list);
+		vout->showing = NULL;
 	}
 
-	if (vout->active) {
-		if (list_empty(&vout->show_list))
-			goto out;
+	if (vout->status == VOUT_STOPPING) {
+		list_splice_tail_init(&vout->show_list, &vout->idle_list);
 
-		q = list_first_entry(&vout->show_list, struct vout_queue, list);
+		vout->status = VOUT_IDLE;
 
-		list_del(&q->list);
+		ipu_dp_setup_channel(vout->dp,
+				IPUV3_COLORSPACE_RGB,
+				IPUV3_COLORSPACE_RGB);
 
-		ipu_cpmem_set_buffer(cpmem, !current_active, q->image.phys);
+		ipu_cpmem_set_buffer(cpmem, !current_active, ipu_cpmem_get_buffer(&vout->cpmem_saved, 0));
 		ipu_idmac_select_buffer(vout->ipu_ch, !current_active);
 
-		vout->done = vout->active;
-		vout->active = q;
+		spin_unlock_irqrestore(&vout->lock, flags);
+		ipu_idmac_wait_busy(vout->ipu_ch, 100);
+		spin_lock_irqsave(&vout->lock, flags);
+		ipu_idmac_disable_channel(vout->ipu_ch);
+
+		/* Restore original CPMEM */
+		memcpy(cpmem, &vout->cpmem_saved, sizeof(*cpmem));
+
+		ipu_idmac_select_buffer(vout->ipu_ch, 0);
+		ipu_idmac_set_double_buffer(vout->ipu_ch, 0);
+
+		ipu_idmac_enable_channel(vout->ipu_ch);
+
+		goto out;
 	}
 
+	if (list_is_singular(&vout->show_list))
+		goto out;
+
+	q = list_first_entry(&vout->show_list, struct vout_queue, list);
+
+	/* remember currently displayed buffer separately */
+	list_del(&q->list);
+	vout->showing = q;
+
+	q = list_first_entry(&vout->show_list, struct vout_queue, list);
+
+	current_active = ipu_idmac_get_current_buffer(vout->ipu_ch);
+	ipu_cpmem_set_buffer(cpmem, !current_active, q->image.phys +
+			q->image.rect.left + q->image.pix.width * q->image.rect.top);
+
+	ipu_idmac_select_buffer(vout->ipu_ch, !current_active);
 out:
 	spin_unlock_irqrestore(&vout->lock, flags);
 
@@ -341,29 +379,30 @@ static int vout_enable(struct vout_queue *q)
 	struct ipu_ch_param *cpmem = ipu_get_cpmem(vout->ipu_ch);
 	int ret;
 
+	ipu_dp_setup_channel(vout->dp,
+			ipu_pixelformat_to_colorspace(image->pix.pixelformat),
+			IPUV3_COLORSPACE_RGB);
+
+	ipu_idmac_wait_busy(vout->ipu_ch, 100);
 	ipu_idmac_disable_channel(vout->ipu_ch);
 
 	memcpy(&vout->cpmem_saved, cpmem, sizeof(*cpmem));
 
 	memset(cpmem, 0, sizeof(*cpmem));
 
-	vout->active = q;
-	list_del(&q->list);
-
 	ret = ipu_cpmem_set_image(cpmem, image);
 	if (ret) {
 		dev_err(vout->dev, "setup cpmem failed with %d\n", ret);
 		return ret;
 	}
-
 	ipu_idmac_set_double_buffer(vout->ipu_ch, 1);
+
+	ipu_cpmem_set_buffer(cpmem, 0, image->phys + image->rect.left + image->pix.width * image->rect.top);
+	ipu_cpmem_set_buffer(cpmem, 1, image->phys + image->rect.left + image->pix.width * image->rect.top);
+	ipu_idmac_select_buffer(vout->ipu_ch, 0);
+	ipu_idmac_select_buffer(vout->ipu_ch, 1);
+
 	ipu_cpmem_set_high_priority(vout->ipu_ch);
-
-	ipu_cpmem_set_buffer(cpmem, 0, image->phys);
-
-	ipu_dp_setup_channel(vout->dp,
-			ipu_pixelformat_to_colorspace(image->pix.pixelformat),
-			IPUV3_COLORSPACE_RGB);
 
 	ipu_idmac_enable_channel(vout->ipu_ch);
 
@@ -385,14 +424,17 @@ static void vout_scaler_complete(void *context, int err)
 		return;
 	}
 
-	list_move_tail(&q->list, &vout->show_list);
-
-	spin_unlock_irqrestore(&vout->lock, flags);
+	if (vout->status == VOUT_STARTING || vout->status == VOUT_RUNNING)
+		list_move_tail(&q->list, &vout->show_list);
+	else
+		list_move_tail(&q->list, &vout->idle_list);
 
 	if (vout->status == VOUT_STARTING) {
-		vout_enable(q);
-		vout->status = VOUT_RUNNING;
+		vout->next_showing = q;
+		vout->status = VOUT_ENABLING;
 	}
+
+	spin_unlock_irqrestore(&vout->lock, flags);
 }
 
 static void vout_videobuf_queue(struct vb2_buffer *vb)
@@ -415,7 +457,16 @@ static void vout_videobuf_queue(struct vb2_buffer *vb)
 
 	if (vout->in_image.rect.width == vout->out_image.rect.width &&
 			vout->in_image.rect.height == vout->out_image.rect.height) {
+		int i = 0;
+		struct list_head *pos;
 		scale = 0;
+		list_for_each(pos, &vout->show_list)
+			i++;
+		if (!list_empty(&vout->show_list) && !list_is_singular(&vout->show_list)) {
+			vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
+			printk("drop\n");
+			goto out;
+		}
 		list_move_tail(&q->list, &vout->show_list);
 	} else {
 		list_move_tail(&q->list, &vout->scale_list);
@@ -433,8 +484,6 @@ static void vout_videobuf_queue(struct vb2_buffer *vb)
 		image->pix.pixelformat = V4L2_PIX_FMT_UYVY;
 		image->pix.bytesperline = image->pix.width * 2;
 
-		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
-
 		vout->in_image.phys = vb2_dma_contig_plane_dma_addr(vb, 0);
 
 		ipu_image_convert(vout->ipu, &vout->in_image, image,
@@ -443,13 +492,8 @@ static void vout_videobuf_queue(struct vb2_buffer *vb)
 		image->pix = vout->in_image.pix;
 		image->rect = vout->in_image.rect;
 		image->phys = vb2_dma_contig_plane_dma_addr(vb, 0);
-
-		if (vout->status == VOUT_STARTING) {
-			vout_enable(q);
-			vout->status = VOUT_RUNNING;
-		}
 	}
-
+out:
 	spin_unlock_irqrestore(&vout->lock, flags);
 }
 
@@ -460,14 +504,30 @@ static void vout_videobuf_release(struct vb2_buffer *vb)
 static int vout_videobuf_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vout_data *vout = vb2q_to_vout(vq);
+	struct vout_queue *q;
+	unsigned long flags;
 	int ret;
+
+	if (vout->status != VOUT_IDLE)
+		return -EINVAL;
+
+	ret = request_threaded_irq(vout->irq, NULL, vout_handler, IRQF_ONESHOT | IRQF_SHARED,
+				   "imx-ipu-vout", vout);
+	if (ret) {
+		dev_err(vout->dev, "failed to request irq: %d\n", ret);
+		return ret;
+	}
+
+	spin_lock_irqsave(&vout->lock, flags);
 
 	vout->status = VOUT_STARTING;
 
-	ret = request_threaded_irq(vout->irq, NULL, vout_handler, IRQF_ONESHOT | IRQF_SHARED,
-			"imx-ipu-ovl", vout);
-	if (ret)
-		return ret;
+	if (!list_empty(&vout->show_list)) {
+		q = list_first_entry(&vout->show_list, struct vout_queue, list);
+		vout->next_showing = q;
+		vout->status = VOUT_ENABLING;
+	}
+	spin_unlock_irqrestore(&vout->lock, flags);
 
 	return 0;
 }
@@ -476,38 +536,25 @@ static int vout_videobuf_stop_streaming(struct vb2_queue *vq)
 {
 	struct vout_data *vout = vb2q_to_vout(vq);
 	unsigned long flags;
-	struct ipu_ch_param *cpmem = ipu_get_cpmem(vout->ipu_ch);
 
-	vout->status = VOUT_STOPPING;
-
-	disable_irq(vout->irq);
-	free_irq(vout->irq, vout);
-	ipu_idmac_disable_channel(vout->ipu_ch);
+	if (vout->status == VOUT_IDLE)
+		return 0;
 
 	spin_lock_irqsave(&vout->lock, flags);
 
-	list_splice_tail_init(&vout->show_list, &vout->idle_list);
-	if (vout->done)
-		list_add_tail(&vout->done->list, &vout->idle_list);
-	if (vout->active)
-		list_add_tail(&vout->active->list, &vout->idle_list);
+	vout->status = VOUT_STOPPING;
 
-	vout->done = NULL;
-	vout->active = NULL;
+	while (!list_empty(&vout->scale_list) || !list_empty(&vout->show_list)) {
+		spin_unlock_irqrestore(&vout->lock, flags);
+		schedule();
+		spin_lock_irqsave(&vout->lock, flags);
+	}
 
-	memcpy(cpmem, &vout->cpmem_saved, sizeof(*cpmem));
-
-	ipu_dp_setup_channel(vout->dp,
-			IPUV3_COLORSPACE_RGB,
-			IPUV3_COLORSPACE_RGB);
-
-	ipu_idmac_select_buffer(vout->ipu_ch, 0);
-	ipu_idmac_set_double_buffer(vout->ipu_ch, 0);
-	ipu_idmac_enable_channel(vout->ipu_ch);
-	ipu_idmac_set_double_buffer(vout->ipu_ch, 0);
-	ipu_idmac_select_buffer(vout->ipu_ch, 0);
+	vout->status = VOUT_IDLE;
 
 	spin_unlock_irqrestore(&vout->lock, flags);
+
+	free_irq(vout->irq, vout);
 
 	return 0;
 }
@@ -676,9 +723,9 @@ static const struct v4l2_ioctl_ops mxc_ioctl_ops = {
 	.vidioc_try_fmt_vid_out		= ipu_ovl_vidioc_try_fmt_vid_out,
 
 	.vidioc_enum_fmt_vid_overlay	= ipu_ovl_vidioc_enum_fmt_vid_out,
-	.vidioc_g_fmt_vid_overlay	= ipu_ovl_vidioc_g_fmt_vid_overlay,
-	.vidioc_s_fmt_vid_overlay	= ipu_ovl_vidioc_s_fmt_vid_overlay,
-	.vidioc_try_fmt_vid_overlay	= ipu_ovl_vidioc_try_fmt_vid_overlay,
+	.vidioc_g_fmt_vid_out_overlay	= ipu_ovl_vidioc_g_fmt_vid_overlay,
+	.vidioc_s_fmt_vid_out_overlay	= ipu_ovl_vidioc_s_fmt_vid_overlay,
+	.vidioc_try_fmt_vid_out_overlay	= ipu_ovl_vidioc_try_fmt_vid_overlay,
 
 	.vidioc_reqbufs			= ipu_ovl_vidioc_reqbufs,
 	.vidioc_querybuf		= ipu_ovl_vidioc_querybuf,
