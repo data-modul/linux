@@ -173,6 +173,7 @@ int v4l2_async_notifier_register(struct v4l2_device *v4l2_dev,
 
 		ret = v4l2_async_test_notify(notifier, sd, asd);
 		if (ret < 0) {
+			list_del(&notifier->list);
 			mutex_unlock(&list_lock);
 			return ret;
 		}
