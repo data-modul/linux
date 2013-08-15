@@ -216,6 +216,7 @@ struct ipucsi {
 	/* The currently active buffer, set by NFACK and cleared by EOF interrupt */
 	struct ipucsi_buffer		*active;
 	struct list_head		capture;
+	int				ilo;
 
 	struct vb2_queue		vb2_vidq;
 
@@ -290,6 +291,15 @@ static int ipu_csi_init_interface(struct ipucsi *ipucsi,
 			sens_conf |= CSI_SENS_CONF_DATA_POL;
 		break;
 	case V4L2_MBUS_BT656:
+		switch (ipucsi->format_mbus[0].field) {
+		case V4L2_FIELD_SEQ_TB:
+		case V4L2_FIELD_SEQ_BT:
+			interlaced = true;
+			break;
+		default:
+			interlaced = false;
+			break;
+		}
 		if (interlaced) {
 			sens_conf |= CSI_SENS_PRTCL_BT656_INTERLACED;
 			if (width == 720 && height == 576) {
@@ -324,6 +334,8 @@ static int ipu_csi_init_interface(struct ipucsi *ipucsi,
 					CSI_CCIRx_START_FLD_BLNK_2ND(2) |
 					CSI_CCIRx_END_FLD_ACTV(4) |
 					CSI_CCIRx_START_FLD_ACTV(0);
+
+				/* 0b111 - 0bHVF */
 			} else {
 				dev_err(dev,
 					"Unsupported CCIR656 interlaced video mode\n");
@@ -375,8 +387,13 @@ static inline void ipucsi_set_inactive_buffer(struct ipucsi *ipucsi,
 {
 	int bufptr = !ipu_idmac_get_current_buffer(ipucsi->ipuch);
 
-	ipu_cpmem_set_buffer(ipu_get_cpmem(ipucsi->ipuch), bufptr,
-			     vb2_dma_contig_plane_dma_addr(vb, 0));
+	if (ipucsi->ilo < 0) {
+		ipu_cpmem_set_buffer(ipu_get_cpmem(ipucsi->ipuch), bufptr,
+				     vb2_dma_contig_plane_dma_addr(vb, 0) - ipucsi->ilo);
+	} else {
+		ipu_cpmem_set_buffer(ipu_get_cpmem(ipucsi->ipuch), bufptr,
+				     vb2_dma_contig_plane_dma_addr(vb, 0));
+	}
 
 	ipu_idmac_select_buffer(ipucsi->ipuch, bufptr);
 }
@@ -615,6 +632,15 @@ static int ipucsi_videobuf_start_streaming(struct vb2_queue *vq, unsigned int co
 		}
 	}
 
+printk("ILO = %d\n", ipucsi->ilo);
+	if (ipucsi->ilo) {
+		ipu_ch_cpmem_set_interlaced_scan(ipucsi->ipuch);
+		if (ipucsi->ilo < 0) {
+			ipu_ch_param_write_field(cpmem, IPU_FIELD_ILO,
+						 0x100000 - (ipucsi->ilo/8));
+		}
+	}
+
 	capture_channel = ipucsi->id; /* CSI0: channel 0, CSI1: channel 1 */
 
 	/*
@@ -788,18 +814,49 @@ static int ipucsi_try_fmt(struct file *file, void *fh,
 {
 	struct ipucsi *ipucsi = video_drvdata(file);
 	struct ipucsi_format *ipucsifmt = ipucsi_current_format(ipucsi);
+	enum v4l2_field in = ipucsi->format_mbus[1].field;
+	enum v4l2_field out = f->fmt.pix.field;
+	struct ipu_fmt *fmt = NULL;
 
-	if (ipucsifmt->rgb && !ipu_find_fmt_rgb(f->fmt.pix.pixelformat))
+	if (ipucsifmt->rgb)
+		fmt = ipu_find_fmt_rgb(f->fmt.pix.pixelformat);
+	if (ipucsifmt->yuv)
+		fmt = ipu_find_fmt_yuv(f->fmt.pix.pixelformat);
+	if (!fmt)
 		return -EINVAL;
-	if (ipucsifmt->yuv && !ipu_find_fmt_yuv(f->fmt.pix.pixelformat))
-		return -EINVAL;
 
-	v4l_bound_align_image(&f->fmt.pix.width, 128, 8192, 3,
-			      &f->fmt.pix.height, 128, 4096, 1, 0);
+	v4l_bound_align_image(&f->fmt.pix.width, 128,
+			      ipucsi->format_mbus[1].width, 3,
+			      &f->fmt.pix.height, 128,
+			      ipucsi->format_mbus[1].height, 1 ,0);
 
-	f->fmt.pix.field = V4L2_FIELD_ANY;
-	f->fmt.pix.bytesperline = f->fmt.pix.width * ipucsifmt->bytes_per_pixel;
+	f->fmt.pix.bytesperline = f->fmt.pix.width * fmt->bytes_per_pixel;
 	f->fmt.pix.sizeimage = f->fmt.pix.bytesperline * f->fmt.pix.height;
+
+	if ((in == V4L2_FIELD_SEQ_TB && out == V4L2_FIELD_INTERLACED_TB) ||
+	    (in == V4L2_FIELD_INTERLACED_TB && out == V4L2_FIELD_SEQ_TB) ||
+	    (in == V4L2_FIELD_SEQ_BT && out == V4L2_FIELD_INTERLACED_BT) ||
+	    (in == V4L2_FIELD_INTERLACED_BT && out == V4L2_FIELD_SEQ_BT)) {
+		/*
+		 * IDMAC scan order can be used for translation between
+		 * interlaced and sequential field formats.
+		 */
+	} else if (out == V4L2_FIELD_NONE || out == V4L2_FIELD_INTERLACED) {
+		/*
+		 * If userspace requests progressive or interlaced frames,
+		 * interlace sequential fields as closest approximation.
+		 */
+		if (in == V4L2_FIELD_SEQ_TB)
+			out = V4L2_FIELD_INTERLACED_TB;
+		else if (in == V4L2_FIELD_SEQ_BT)
+			out = V4L2_FIELD_INTERLACED_BT;
+		else
+			out = in;
+	} else {
+		/* Translation impossible or userspace doesn't care */
+		out = in;
+	}
+	f->fmt.pix.field = out;
 
 	return 0;
 }
@@ -808,6 +865,7 @@ static int ipucsi_s_fmt(struct file *file, void *fh,
 		struct v4l2_format *f)
 {
 	struct ipucsi *ipucsi = video_drvdata(file);
+	enum v4l2_field in, out;
 	int ret;
 
 	ret = ipucsi_try_fmt(file, fh, f);
@@ -815,6 +873,21 @@ static int ipucsi_s_fmt(struct file *file, void *fh,
 		return ret;
 
 	ipucsi->format = *f;
+
+	/*
+	 * Set IDMAC scan order interlace offset (ILO) for translation between
+	 * interlaced and sequential field formats.
+	 */
+	in = ipucsi->format_mbus[1].field;
+	out = f->fmt.pix.field;
+	if ((in == V4L2_FIELD_SEQ_TB && out == V4L2_FIELD_INTERLACED_TB) ||
+	    (in == V4L2_FIELD_INTERLACED_TB && out == V4L2_FIELD_SEQ_TB))
+		ipucsi->ilo = f->fmt.pix.bytesperline;
+	else if ((in == V4L2_FIELD_SEQ_BT && out == V4L2_FIELD_INTERLACED_BT) ||
+		 (in == V4L2_FIELD_INTERLACED_BT && out == V4L2_FIELD_SEQ_BT))
+		ipucsi->ilo = -f->fmt.pix.bytesperline;
+	else
+		ipucsi->ilo = 0;
 
 	return 0;
 }
@@ -924,6 +997,16 @@ static int ipucsi_subdev_set_format(struct v4l2_subdev *subdev,
 	mbusformat->width = width;
 	mbusformat->height = height;
 	mbusformat->code = ipucsiformat->mbus_code;
+	mbusformat->field = sdformat->format.field;
+
+	if (mbusformat->field == V4L2_FIELD_SEQ_TB &&
+	    mbusformat->width == 720 && mbusformat->height == 480 &&
+	    ipucsi->endpoint.bus_type == V4L2_MBUS_BT656) {
+		/* We capture NTSC bottom field first */
+		mbusformat->field = V4L2_FIELD_SEQ_BT;
+	} else if (mbusformat->field == V4L2_FIELD_ANY) {
+		mbusformat->field = ipucsi->format_mbus[!sdformat->pad].field;
+	}
 
 	sdformat->format = *mbusformat;
 
