@@ -657,8 +657,14 @@ printk("ILO = %d\n", ipucsi->ilo);
 
 	ipu_csi_write(ipucsi, CSI_ACT_FRM_HEIGHT(yres) | CSI_ACT_FRM_WIDTH(xres),
 			CSI_ACT_FRM_SIZE);
-	ipu_csi_write(ipucsi, CSI_OUT_FRM_CTRL_HSC(0) | CSI_OUT_FRM_CTRL_VSC(0),
-			CSI_OUT_FRM_CTRL);
+	/* FIXME */
+	if (xres == 720 && yres == 480) {
+		ipu_csi_write(ipucsi, CSI_OUT_FRM_CTRL_HSC(0) |
+				CSI_OUT_FRM_CTRL_VSC(3), CSI_OUT_FRM_CTRL);
+	} else {
+		ipu_csi_write(ipucsi, CSI_OUT_FRM_CTRL_HSC(0) |
+				CSI_OUT_FRM_CTRL_VSC(0), CSI_OUT_FRM_CTRL);
+	}
 
 	ret = media_entity_pipeline_start(&ipucsi->subdev.entity, &ipucsi->pipe);
 	if (ret)
