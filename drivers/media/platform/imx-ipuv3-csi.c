@@ -1170,6 +1170,7 @@ static int ipucsi_register_subdev_node(struct ipucsi *ipucsi,
 
 static int ipucsi_subdev_init(struct ipucsi *ipucsi, struct device_node *node)
 {
+	struct device_node *endpoint;
 	int ret;
 
 	v4l2_subdev_init(&ipucsi->subdev, &ipucsi_subdev_ops);
@@ -1178,6 +1179,10 @@ static int ipucsi_subdev_init(struct ipucsi *ipucsi, struct device_node *node)
 
 	snprintf(ipucsi->subdev.name, sizeof(ipucsi->subdev.name), "%s",
 			node->full_name);
+
+	endpoint = v4l2_of_get_next_endpoint(node, NULL);
+	if (endpoint)
+		v4l2_of_parse_endpoint(endpoint, &ipucsi->endpoint);
 
 	ipucsi->subdev.entity.ops = &ipucsi_entity_ops;
 
