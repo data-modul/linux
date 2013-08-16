@@ -436,7 +436,7 @@ static irqreturn_t ipucsi_new_frame_handler(int irq, void *context)
 					   struct ipucsi_buffer, queue);
 	vb = &ipucsi->active->vb;
 	do_gettimeofday(&vb->v4l2_buf.timestamp);
-	vb->v4l2_buf.field = ipucsi->field;
+	vb->v4l2_buf.field = ipucsi->format.fmt.pix.field;
 	vb->v4l2_buf.sequence = ipucsi->sequence++;
 
 	/*
