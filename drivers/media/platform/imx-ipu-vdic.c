@@ -184,12 +184,30 @@ static void device_run(void *priv)
 		image->rect.width = pix->width;
 		image->rect.height = pix->height / 2;
 	}
+	if (pix->field == V4L2_FIELD_INTERLACED_BT) {
+		for (i = 0; i < 3; i++)
+			image_in[i].pix.bytesperline = pix->bytesperline * 2;
 
-	image_in[0].phys = vb2_dma_contig_plane_dma_addr(ctx->in_p, 0) +
-		pix->bytesperline * pix->height / 2;
-	image_in[1].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0);
-	image_in[2].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0) +
-		pix->bytesperline * pix->height / 2;
+		image_in[0].phys = vb2_dma_contig_plane_dma_addr(ctx->in_p, 0);
+		image_in[1].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0) +
+			pix->bytesperline;
+		image_in[2].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0);
+	} else if (pix->field == V4L2_FIELD_INTERLACED_TB) {
+		for (i = 0; i < 3; i++)
+			image_in[i].pix.bytesperline = pix->bytesperline * 2;
+
+		image_in[0].phys = vb2_dma_contig_plane_dma_addr(ctx->in_p, 0) +
+			pix->bytesperline;
+		image_in[1].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0);
+		image_in[2].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0) +
+			pix->bytesperline;
+	} else {
+		image_in[0].phys = vb2_dma_contig_plane_dma_addr(ctx->in_p, 0) +
+			pix->bytesperline * pix->height / 2;
+		image_in[1].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0);
+		image_in[2].phys = vb2_dma_contig_plane_dma_addr(ctx->in, 0) +
+			pix->bytesperline * pix->height / 2;
+	}
 
 	q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	pix = &q_data->cur_fmt;
@@ -314,6 +332,12 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	struct ipu_vdic_q_data *q_data;
 	struct vb2_queue *vq;
 	struct ipu_vdic_ctx *ctx = priv;
+	bool interlaced = false;
+	int ret;
+
+	if (f->fmt.pix.field == V4L2_FIELD_INTERLACED) {
+		interlaced = true;
+	}
 
 	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
 	if (!vq)
@@ -328,7 +352,14 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 		return -EBUSY;
 	}
 
-	return ipu_s_fmt(file, priv, f, &q_data->cur_fmt);
+	ret = ipu_s_fmt(file, priv, f, &q_data->cur_fmt);
+
+	if (interlaced) {
+		q_data->cur_fmt.field = V4L2_FIELD_INTERLACED_TB;
+		f->fmt.pix.field = V4L2_FIELD_INTERLACED_TB;
+	}
+
+	return ret;
 }
 
 static int vidioc_reqbufs(struct file *file, void *priv,
