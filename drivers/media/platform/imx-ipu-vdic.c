@@ -297,33 +297,32 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 static int vidioc_try_fmt_vid_out(struct file *file, void *priv,
 				  struct v4l2_format *f)
 {
-	/*
-	 * If you see any of the messages below it's sha's next turn.
-	 */
+	enum v4l2_field field = f->fmt.pix.field;
+	int ret;
+
 	switch (f->fmt.pix.field) {
-		case V4L2_FIELD_ANY:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_ANY");
-			f->fmt.pix.field = V4L2_FIELD_SEQ_TB;
-			break;
-		case V4L2_FIELD_INTERLACED:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_INTERLACED");
-			f->fmt.pix.field = V4L2_FIELD_SEQ_TB;
-			break;
-		case V4L2_FIELD_SEQ_TB:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_SEQ_TB");
-			break;
-		case V4L2_FIELD_SEQ_BT:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_SEQ_BT");
-			break;
-		case V4L2_FIELD_INTERLACED_TB:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_INTERLACED_TB");
-			break;
-		case V4L2_FIELD_INTERLACED_BT:
-			printk("%s: %s\n", __func__, "V4L2_FIELD_INTERLACED_BT");
-			break;
+	case V4L2_FIELD_SEQ_BT:
+	case V4L2_FIELD_INTERLACED_BT:
+		printk("%s: %s not supported yet\n", __func__,
+		       v4l2_field_names[f->fmt.pix.field]);
+		/* fallthrough */
+	case V4L2_FIELD_ANY:
+	case V4L2_FIELD_NONE:
+	case V4L2_FIELD_TOP:
+	case V4L2_FIELD_BOTTOM:
+	case V4L2_FIELD_INTERLACED:
+		field = V4L2_FIELD_INTERLACED_TB;
+		break;
+	case V4L2_FIELD_SEQ_TB:
+	case V4L2_FIELD_INTERLACED_TB:
+		break;
 	}
 
-	return ipu_try_fmt(file, priv, f);
+	ret = ipu_try_fmt(file, priv, f);
+
+	f->fmt.pix.field = field;
+
+	return ret;
 }
 
 static int vidioc_s_fmt(struct file *file, void *priv,
@@ -332,12 +331,8 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	struct ipu_vdic_q_data *q_data;
 	struct vb2_queue *vq;
 	struct ipu_vdic_ctx *ctx = priv;
-	bool interlaced = false;
+	enum v4l2_field field = V4L2_FIELD_ANY;
 	int ret;
-
-	if (f->fmt.pix.field == V4L2_FIELD_INTERLACED) {
-		interlaced = true;
-	}
 
 	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
 	if (!vq)
@@ -352,11 +347,16 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 		return -EBUSY;
 	}
 
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+		vidioc_try_fmt_vid_out(file, priv, f);
+		field = f->fmt.pix.field;
+	}
+
 	ret = ipu_s_fmt(file, priv, f, &q_data->cur_fmt);
 
-	if (interlaced) {
-		q_data->cur_fmt.field = V4L2_FIELD_INTERLACED_TB;
-		f->fmt.pix.field = V4L2_FIELD_INTERLACED_TB;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+		f->fmt.pix.field = field;
+		q_data->cur_fmt.field = field;
 	}
 
 	return ret;
