@@ -187,6 +187,22 @@ static struct ipucsi_format ipucsi_formats[] = {
 		.bytes_per_pixel = 2,
 		.bytes_per_sample = 1,
 		.yuv = 1,
+	}, {
+		.name = "UYUV 1x16 bit",
+		.fourcc = V4L2_PIX_FMT_UYVY,
+		.mbus_code = V4L2_MBUS_FMT_UYVY8_1X16,
+		.sens_conf = CSI_SENS_CONF_DATA_FMT_GENERIC | CSI_SENS_CONF_DATA_WIDTH_16,
+		.bytes_per_pixel = 2,
+		.bytes_per_sample = 2,
+		.raw = 1,
+	}, {
+		.name = "YUYV 1x16 bit",
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.mbus_code = V4L2_MBUS_FMT_YUYV8_1X16,
+		.sens_conf = CSI_SENS_CONF_DATA_FMT_GENERIC | CSI_SENS_CONF_DATA_WIDTH_16,
+		.bytes_per_pixel = 2,
+		.bytes_per_sample = 2,
+		.raw = 1,
 	},
 };
 
@@ -823,20 +839,28 @@ static int ipucsi_try_fmt(struct file *file, void *fh,
 	enum v4l2_field in = ipucsi->format_mbus[1].field;
 	enum v4l2_field out = f->fmt.pix.field;
 	struct ipu_fmt *fmt = NULL;
+	int bytes_per_pixel;
 
 	if (ipucsifmt->rgb)
 		fmt = ipu_find_fmt_rgb(f->fmt.pix.pixelformat);
 	if (ipucsifmt->yuv)
 		fmt = ipu_find_fmt_yuv(f->fmt.pix.pixelformat);
-	if (!fmt)
-		return -EINVAL;
+
+	if (ipucsifmt->raw) {
+		f->fmt.pix.pixelformat = ipucsifmt->fourcc;
+		bytes_per_pixel = ipucsifmt->bytes_per_pixel;
+	} else {
+		if (!fmt)
+			return -EINVAL;
+		bytes_per_pixel = fmt->bytes_per_pixel;
+	}
 
 	v4l_bound_align_image(&f->fmt.pix.width, 128,
 			      ipucsi->format_mbus[1].width, 3,
 			      &f->fmt.pix.height, 128,
 			      ipucsi->format_mbus[1].height, 1 ,0);
 
-	f->fmt.pix.bytesperline = f->fmt.pix.width * fmt->bytes_per_pixel;
+	f->fmt.pix.bytesperline = f->fmt.pix.width * bytes_per_pixel;
 	f->fmt.pix.sizeimage = f->fmt.pix.bytesperline * f->fmt.pix.height;
 
 	if ((in == V4L2_FIELD_SEQ_TB && out == V4L2_FIELD_INTERLACED_TB) ||
