@@ -99,6 +99,12 @@
 	status = "okay";
 };
 
+&cpu0 {
+	arm-supply = <&sw1a_reg>;
+	soc-supply = <&sw1c_reg>;
+	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
+};
+
 &ecspi1 {
 	fsl,spi-num-chipselects = <1>;
 	cs-gpios = <&gpio4 11 0>;
@@ -120,6 +126,10 @@
 	pinctrl-0 = <&pinctrl_fec>;
 	phy-mode = "rmii";
 	status = "okay";
+};
+
+&gpu {
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
 };
 
 &i2c1 {
@@ -206,6 +216,7 @@
 			vgen3_reg: vgen3 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
 			};
 
 			vgen4_reg: vgen4 {
