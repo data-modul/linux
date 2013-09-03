@@ -941,15 +941,7 @@ static const struct v4l2_subdev_ops ipucsi_subdev_ops = {
 	.pad    = &ipucsi_subdev_pad_ops,
 };
 
-static int ipucsi_link_setup(struct media_entity *entity,
-			  const struct media_pad *local,
-			  const struct media_pad *remote, u32 flags)
-{
-	return 0;
-}
-
 struct media_entity_operations ipucsi_entity_ops = {
-	.link_setup = ipucsi_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
 };
 
