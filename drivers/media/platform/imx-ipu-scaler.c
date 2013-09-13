@@ -81,7 +81,7 @@ struct ipu_scale_q_data {
 struct ipu_scale_ctx {
 	struct ipu_scale_dev	*ipu_scaler;
 
-	struct v4l2_m2m_ctx	*m2m_ctx;
+	struct v4l2_fh		fh;
 	struct vb2_alloc_ctx	*alloc_ctx;
 	struct ipu_scale_q_data	q_data[2];
 	struct mutex		lock;
@@ -115,8 +115,8 @@ static int job_ready(void *priv)
 {
 	struct ipu_scale_ctx *ctx = priv;
 
-	if (v4l2_m2m_num_src_bufs_ready(ctx->m2m_ctx) < 1 
-	    || v4l2_m2m_num_dst_bufs_ready(ctx->m2m_ctx) < 1) {
+	if (v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx) < 1
+	    || v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx) < 1) {
 		dev_dbg(ctx->ipu_scaler->dev, "Not enough buffers available\n");
 		return 0;
 	}
@@ -169,16 +169,16 @@ static void ipu_scaler_work(struct work_struct *work)
 	 * If streamoff dequeued all buffers before we could get the lock,
 	 * just bail out immediately.
 	 */
-	if (!v4l2_m2m_num_src_bufs_ready(ctx->m2m_ctx) ||
-		!v4l2_m2m_num_dst_bufs_ready(ctx->m2m_ctx)) {
+	if (!v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx) ||
+		!v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx)) {
 		mutex_unlock(&ctx->lock);
 		WARN_ON(1);
 		schedule_work(&ctx->skip_run);
 		return;
 	}
 
-	src_buf = v4l2_m2m_next_src_buf(ctx->m2m_ctx);
-	dst_buf = v4l2_m2m_next_dst_buf(ctx->m2m_ctx);
+	src_buf = v4l2_m2m_next_src_buf(ctx->fh.m2m_ctx);
+	dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
 
 	q_data = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
 	pix = &q_data->cur_fmt;
@@ -211,8 +211,8 @@ static void ipu_scaler_work(struct work_struct *work)
 		err = ctx->error;
 	}
 
-	src_buf = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
-	dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+	src_buf = v4l2_m2m_src_buf_remove(ctx->fh.m2m_ctx);
+	dst_buf = v4l2_m2m_dst_buf_remove(ctx->fh.m2m_ctx);
 
 	dst_buf->v4l2_buf.timestamp = src_buf->v4l2_buf.timestamp;
 	dst_buf->v4l2_buf.timecode = src_buf->v4l2_buf.timecode;
@@ -224,7 +224,7 @@ static void ipu_scaler_work(struct work_struct *work)
 
 	mutex_unlock(&ctx->lock);
 
-	v4l2_m2m_job_finish(ipu_scaler->m2m_dev, ctx->m2m_ctx);
+	v4l2_m2m_job_finish(ipu_scaler->m2m_dev, ctx->fh.m2m_ctx);
 }
 
 /*
@@ -266,7 +266,7 @@ static int vidioc_g_fmt(struct ipu_scale_ctx *ctx, struct v4l2_format *f)
 	struct ipu_scale_q_data *q_data;
 	struct v4l2_pix_format *pix;
 
-	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
+	vq = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, f->type);
 	if (!vq)
 		return -EINVAL;
 
@@ -309,7 +309,7 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	struct ipu_scale_ctx *ctx = fh_to_ctx(priv);
 	int ret;
 
-	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
+	vq = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, f->type);
 	if (!vq)
 		return -EINVAL;
 
@@ -382,7 +382,7 @@ static int vidioc_s_selection(struct file *file, void *priv,
 	struct ipu_scale_q_data *q_data;
 	struct vb2_queue *vq;
 
-	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, s->type);
+	vq = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, s->type);
 	if (!vq)
 		return -EINVAL;
 
@@ -460,7 +460,7 @@ static void ipu_scale_skip_run(struct work_struct *work)
 {
 	struct ipu_scale_ctx *ctx = container_of(work, struct ipu_scale_ctx, skip_run);
 
-	v4l2_m2m_job_finish(ctx->ipu_scaler->m2m_dev, ctx->m2m_ctx);
+	v4l2_m2m_job_finish(ctx->ipu_scaler->m2m_dev, ctx->fh.m2m_ctx);
 }
 
 
@@ -528,7 +528,7 @@ static void ipu_scale_buf_queue(struct vb2_buffer *vb)
 {
 	struct ipu_scale_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
-	v4l2_m2m_buf_queue(ctx->m2m_ctx, vb);
+	v4l2_m2m_buf_queue(ctx->fh.m2m_ctx, vb);
 }
 
 static struct vb2_ops ipu_scale_qops = {
@@ -595,10 +595,9 @@ static int ipu_scale_open(struct file *file)
 	ctx->ipu_scaler = ipu_scaler;
 	mutex_init(&ctx->lock);
 
-	ctx->m2m_ctx = v4l2_m2m_ctx_init(ipu_scaler->m2m_dev, ctx, &queue_init);
-
-	if (IS_ERR(ctx->m2m_ctx)) {
-		int ret = PTR_ERR(ctx->m2m_ctx);
+	ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(ipu_scaler->m2m_dev, ctx, &queue_init);
+	if (IS_ERR(ctx->fh.m2m_ctx)) {
+		int ret = PTR_ERR(ctx->fh.m2m_ctx);
 
 		kfree(ctx);
 		return ret;
@@ -620,7 +619,7 @@ static int ipu_scale_open(struct file *file)
 	atomic_inc(&ipu_scaler->num_inst);
 
 	dev_dbg(ipu_scaler->dev, "Created instance %p, m2m_ctx: %p\n",
-			ctx, ctx->m2m_ctx);
+			ctx, ctx->fh.m2m_ctx);
 
 	return 0;
 }
@@ -632,7 +631,7 @@ static int ipu_scale_release(struct file *file)
 
 	dev_dbg(ipu_scaler->dev,"Releasing instance %p\n", ctx);
 
-	v4l2_m2m_ctx_release(ctx->m2m_ctx);
+	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	kfree(ctx);
