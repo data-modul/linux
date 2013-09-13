@@ -115,8 +115,8 @@ int ipu_try_fmt(struct file *file, void *fh,
 {
 	struct ipu_fmt *fmt;
 
-	v4l_bound_align_image(&f->fmt.pix.width, 128, 4096, 2,
-			      &f->fmt.pix.height, 128, 4096, 1, 0);
+	v4l_bound_align_image(&f->fmt.pix.width, 8, 4096, 2,
+			      &f->fmt.pix.height, 2, 4096, 1, 0);
 
 	f->fmt.pix.field = V4L2_FIELD_NONE;
 
