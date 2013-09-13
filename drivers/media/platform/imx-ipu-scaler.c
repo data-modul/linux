@@ -52,6 +52,8 @@
 /* In bytes, per queue */
 #define MEM2MEM_VID_MEM_LIMIT	(64 * 1024 * 1024)
 
+#define fh_to_ctx(__fh)	container_of(__fh, struct ipu_scale_ctx, fh)
+
 enum {
 	V4L2_M2M_SRC = 0,
 	V4L2_M2M_DST = 1,
@@ -304,7 +306,7 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 {
 	struct ipu_scale_q_data *q_data;
 	struct vb2_queue *vq;
-	struct ipu_scale_ctx *ctx = priv;
+	struct ipu_scale_ctx *ctx = fh_to_ctx(priv);
 	int ret;
 
 	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
@@ -336,7 +338,7 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 static int vidioc_g_selection(struct file *file, void *priv,
 			      struct v4l2_selection *s)
 {
-	struct ipu_scale_ctx *ctx = priv;
+	struct ipu_scale_ctx *ctx = fh_to_ctx(priv);
 	struct ipu_scale_q_data *q_data;
 
 	switch (s->target) {
@@ -376,7 +378,7 @@ static int vidioc_g_selection(struct file *file, void *priv,
 static int vidioc_s_selection(struct file *file, void *priv,
 			      struct v4l2_selection *s)
 {
-	struct ipu_scale_ctx *ctx = priv;
+	struct ipu_scale_ctx *ctx = fh_to_ctx(priv);
 	struct ipu_scale_q_data *q_data;
 	struct vb2_queue *vq;
 
@@ -418,75 +420,6 @@ static int vidioc_s_selection(struct file *file, void *priv,
 	return 0;
 }
 
-static int vidioc_reqbufs(struct file *file, void *priv,
-			  struct v4l2_requestbuffers *reqbufs)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_reqbufs(file, ctx->m2m_ctx, reqbufs);
-}
-
-static int vidioc_querybuf(struct file *file, void *priv,
-			   struct v4l2_buffer *buf)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_querybuf(file, ctx->m2m_ctx, buf);
-}
-
-static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_qbuf(file, ctx->m2m_ctx, buf);
-}
-
-static int vidioc_expbuf(struct file *file, void *priv,
-		struct v4l2_exportbuffer *eb)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_expbuf(file, ctx->m2m_ctx, eb);
-}
-
-static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_dqbuf(file, ctx->m2m_ctx, buf);
-}
-
-static int vidioc_create_bufs(struct file*file, void *priv,
-			      struct v4l2_create_buffers *create)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_create_bufs(file, ctx->m2m_ctx, create);
-}
-
-static int vidioc_streamon(struct file *file, void *priv,
-			   enum v4l2_buf_type type)
-{
-	struct ipu_scale_ctx *ctx = priv;
-
-	return v4l2_m2m_streamon(file, ctx->m2m_ctx, type);
-}
-
-static int vidioc_streamoff(struct file *file, void *priv,
-			    enum v4l2_buf_type type)
-{
-	struct ipu_scale_ctx *ctx = priv;
-	int ret;
-
-	ret = mutex_lock_interruptible(&ctx->lock);
-	if (!ret) {
-		ret = v4l2_m2m_streamoff(file, ctx->m2m_ctx, type);
-		mutex_unlock(&ctx->lock);
-	}
-
-	return ret;
-}
-
 static int vidioc_enum_framesizes(struct file *file, void *fh,
 				  struct v4l2_frmsizeenum *fsize)
 {
@@ -509,16 +442,16 @@ static const struct v4l2_ioctl_ops ipu_scale_ioctl_ops = {
 	.vidioc_g_selection	= vidioc_g_selection,
 	.vidioc_s_selection	= vidioc_s_selection,
 
-	.vidioc_reqbufs		= vidioc_reqbufs,
-	.vidioc_querybuf	= vidioc_querybuf,
+	.vidioc_reqbufs		= v4l2_m2m_ioctl_reqbufs,
+	.vidioc_querybuf	= v4l2_m2m_ioctl_querybuf,
 
-	.vidioc_qbuf		= vidioc_qbuf,
-	.vidioc_expbuf		= vidioc_expbuf,
-	.vidioc_dqbuf		= vidioc_dqbuf,
-	.vidioc_create_bufs	= vidioc_create_bufs,
+	.vidioc_qbuf		= v4l2_m2m_ioctl_qbuf,
+	.vidioc_expbuf		= v4l2_m2m_ioctl_expbuf,
+	.vidioc_dqbuf		= v4l2_m2m_ioctl_dqbuf,
+	.vidioc_create_bufs	= v4l2_m2m_ioctl_create_bufs,
 
-	.vidioc_streamon	= vidioc_streamon,
-	.vidioc_streamoff	= vidioc_streamoff,
+	.vidioc_streamon	= v4l2_m2m_ioctl_streamon,
+	.vidioc_streamoff	= v4l2_m2m_ioctl_streamoff,
 
 	.vidioc_enum_framesizes = vidioc_enum_framesizes,
 };
@@ -598,24 +531,12 @@ static void ipu_scale_buf_queue(struct vb2_buffer *vb)
 	v4l2_m2m_buf_queue(ctx->m2m_ctx, vb);
 }
 
-static void ipu_scale_wait_prepare(struct vb2_queue *q)
-{
-	struct ipu_scale_ctx *ctx = vb2_get_drv_priv(q);
-	mutex_unlock(&ctx->ipu_scaler->dev_mutex);
-}
-
-static void ipu_scale_wait_finish(struct vb2_queue *q)
-{
-	struct ipu_scale_ctx *ctx = vb2_get_drv_priv(q);
-	mutex_lock(&ctx->ipu_scaler->dev_mutex);
-}
-
 static struct vb2_ops ipu_scale_qops = {
 	.queue_setup	 = ipu_scale_queue_setup,
 	.buf_prepare	 = ipu_scale_buf_prepare,
 	.buf_queue	 = ipu_scale_buf_queue,
-	.wait_prepare	 = ipu_scale_wait_prepare,
-	.wait_finish	 = ipu_scale_wait_finish,
+	.wait_prepare	 = vb2_ops_wait_prepare,
+	.wait_finish	 = vb2_ops_wait_finish,
 };
 
 static int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
@@ -631,6 +552,7 @@ static int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *ds
 	src_vq->ops = &ipu_scale_qops;
 	src_vq->mem_ops = &vb2_dma_contig_memops;
 	src_vq->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_COPY;
+	src_vq->lock = &ctx->ipu_scaler->dev_mutex;
 
 	ret = vb2_queue_init(src_vq);
 	if (ret)
@@ -644,6 +566,7 @@ static int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *ds
 	dst_vq->ops = &ipu_scale_qops;
 	dst_vq->mem_ops = &vb2_dma_contig_memops;
 	dst_vq->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_COPY;
+	dst_vq->lock = &ctx->ipu_scaler->dev_mutex;
 
 	return vb2_queue_init(dst_vq);
 }
@@ -666,7 +589,9 @@ static int ipu_scale_open(struct file *file)
 	INIT_WORK(&ctx->skip_run, ipu_scale_skip_run);
 	INIT_WORK(&ctx->work, ipu_scaler_work);
 	init_completion(&ctx->completion);
-	file->private_data = ctx;
+	v4l2_fh_init(&ctx->fh, video_devdata(file));
+	file->private_data = &ctx->fh;
+	v4l2_fh_add(&ctx->fh);
 	ctx->ipu_scaler = ipu_scaler;
 	mutex_init(&ctx->lock);
 
@@ -703,11 +628,13 @@ static int ipu_scale_open(struct file *file)
 static int ipu_scale_release(struct file *file)
 {
 	struct ipu_scale_dev *ipu_scaler = video_drvdata(file);
-	struct ipu_scale_ctx *ctx = file->private_data;
+	struct ipu_scale_ctx *ctx = fh_to_ctx(file->private_data);
 
 	dev_dbg(ipu_scaler->dev,"Releasing instance %p\n", ctx);
 
 	v4l2_m2m_ctx_release(ctx->m2m_ctx);
+	v4l2_fh_del(&ctx->fh);
+	v4l2_fh_exit(&ctx->fh);
 	kfree(ctx);
 
 	atomic_dec(&ipu_scaler->num_inst);
@@ -715,28 +642,13 @@ static int ipu_scale_release(struct file *file)
 	return 0;
 }
 
-static unsigned int ipu_scale_poll(struct file *file,
-				 struct poll_table_struct *wait)
-{
-	struct ipu_scale_ctx *ctx = file->private_data;
-
-	return v4l2_m2m_poll(file, ctx->m2m_ctx, wait);
-}
-
-static int ipu_scale_mmap(struct file *file, struct vm_area_struct *vma)
-{
-	struct ipu_scale_ctx *ctx = file->private_data;
-
-	return v4l2_m2m_mmap(file, ctx->m2m_ctx, vma);
-}
-
 static const struct v4l2_file_operations ipu_scale_fops = {
 	.owner		= THIS_MODULE,
 	.open		= ipu_scale_open,
 	.release	= ipu_scale_release,
-	.poll		= ipu_scale_poll,
+	.poll		= v4l2_m2m_fop_poll,
 	.unlocked_ioctl	= video_ioctl2,
-	.mmap		= ipu_scale_mmap,
+	.mmap		= v4l2_m2m_fop_mmap,
 };
 
 static struct video_device ipu_scale_videodev = {
