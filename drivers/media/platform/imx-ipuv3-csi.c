@@ -251,6 +251,7 @@ struct ipucsi {
 	struct v4l2_format		format;
 	struct ipucsi_format		ipucsifmt;
 	struct v4l2_ctrl_handler	ctrls;
+	struct v4l2_ctrl_handler	ctrls_vdev;
 	struct v4l2_ctrl		*ctrl_test_pattern;
 	struct media_pad		media_pad;
 	struct media_pipeline		pipe;
@@ -1114,12 +1115,18 @@ int v4l2_media_subdev_s_power(struct ipucsi *ipucsi, int enable)
 		goto disable;
 	}
 
+	v4l2_ctrl_handler_init(&ipucsi->ctrls_vdev, 1);
+
 	while (!ret && (entity = media_entity_graph_walk_next(&graph))) {
 		if (media_entity_type(entity) == MEDIA_ENT_T_V4L2_SUBDEV) {
 			sd = media_entity_to_v4l2_subdev(entity);
 			ret = v4l2_subdev_call(sd, core, s_power, 1);
 			if (ret == -ENOIOCTLCMD)
 				ret = 0;
+
+			ret = v4l2_ctrl_add_handler(&ipucsi->ctrls_vdev, sd->ctrl_handler, NULL);
+			if (ret)
+				return ret;
 		}
 	}
 
@@ -1156,6 +1163,8 @@ static int ipucsi_release(struct file *file)
 	struct ipucsi *ipucsi = video_drvdata(file);
 
 	v4l2_media_subdev_s_power(ipucsi, 0);
+
+	v4l2_ctrl_handler_free(&ipucsi->ctrls_vdev);
 
 	mutex_lock(&ipucsi->mutex);
 	vb2_queue_release(&ipucsi->vb2_vidq);
@@ -1334,6 +1343,7 @@ static int ipucsi_video_device_init(struct platform_device *pdev,
 	vdev->minor	= -1;
 	vdev->release	= video_device_release_empty;
 	vdev->lock	= &ipucsi->mutex;
+	vdev->ctrl_handler = &ipucsi->ctrls_vdev;
 
 	video_set_drvdata(vdev, ipucsi);
 
