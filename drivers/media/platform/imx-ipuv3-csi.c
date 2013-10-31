@@ -1098,8 +1098,9 @@ disable:
 	return ret;
 }
 
-int v4l2_media_subdev_s_power(struct media_entity *entity, int enable)
+int v4l2_media_subdev_s_power(struct ipucsi *ipucsi, int enable)
 {
+	struct media_entity *entity = &ipucsi->subdev.entity;
 	struct media_entity_graph graph;
 	struct media_entity *first;
 	struct v4l2_subdev *sd;
@@ -1143,7 +1144,7 @@ static int ipucsi_open(struct file *file)
 	struct ipucsi *ipucsi = video_drvdata(file);
 	int ret = 0;
 
-	ret = v4l2_media_subdev_s_power(&ipucsi->subdev.entity, 1);
+	ret = v4l2_media_subdev_s_power(ipucsi, 1);
 	if (ret)
 		return ret;
 
@@ -1154,7 +1155,7 @@ static int ipucsi_release(struct file *file)
 {
 	struct ipucsi *ipucsi = video_drvdata(file);
 
-	v4l2_media_subdev_s_power(&ipucsi->subdev.entity, 0);
+	v4l2_media_subdev_s_power(ipucsi, 0);
 
 	mutex_lock(&ipucsi->mutex);
 	vb2_queue_release(&ipucsi->vb2_vidq);
