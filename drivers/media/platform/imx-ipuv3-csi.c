@@ -1198,6 +1198,42 @@ static const struct v4l2_file_operations ipucsi_capture_fops = {
 	.mmap		= ipucsi_capture_mmap,
 };
 
+static int ipucsi_enum_framesizes(struct file *file, void *fh,
+				  struct v4l2_frmsizeenum *fsize)
+{
+	struct ipucsi *ipucsi = video_drvdata(file);
+	struct ipucsi_format *ipucsifmt = ipucsi_current_format(ipucsi);
+	struct ipu_fmt *fmt = NULL;
+
+	if (((fsize->index != 0) &&
+	     (ipucsi->endpoint.bus_type != V4L2_MBUS_BT656)) ||
+	    (fsize->index > 1))
+		return -EINVAL;
+
+	if (ipucsifmt->rgb)
+		fmt = ipu_find_fmt_rgb(fsize->pixel_format);
+	if (ipucsifmt->yuv)
+		fmt = ipu_find_fmt_yuv(fsize->pixel_format);
+	if (!fmt)
+		return -EINVAL;
+
+	if (ipucsi->endpoint.bus_type == V4L2_MBUS_BT656) {
+		fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+		fsize->discrete.width = 720;
+		fsize->discrete.height = fsize->index ? 576 : 480;
+	} else {
+		fsize->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
+		fsize->stepwise.min_width = 1;
+		fsize->stepwise.min_height = 1;
+		fsize->stepwise.max_width = ipucsi->format_mbus[1].width;
+		fsize->stepwise.max_height = ipucsi->format_mbus[1].height;
+		fsize->stepwise.step_width = 1;
+		fsize->stepwise.step_height = 1;
+	}
+
+	return 0;
+}
+
 static const struct v4l2_ioctl_ops ipucsi_capture_ioctl_ops = {
 	.vidioc_querycap		= ipucsi_querycap,
 
@@ -1215,6 +1251,8 @@ static const struct v4l2_ioctl_ops ipucsi_capture_ioctl_ops = {
 
 	.vidioc_streamon		= ipucsi_streamon,
 	.vidioc_streamoff		= ipucsi_streamoff,
+
+	.vidioc_enum_framesizes		= ipucsi_enum_framesizes,
 };
 
 static int ipucsi_subdev_s_ctrl(struct v4l2_ctrl *ctrl)
