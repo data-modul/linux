@@ -84,11 +84,11 @@ struct ipu_scale_ctx {
 	struct v4l2_fh		fh;
 	struct vb2_alloc_ctx	*alloc_ctx;
 	struct ipu_scale_q_data	q_data[2];
-	struct mutex		lock;
 	struct work_struct	work;
 	struct completion	completion;
 	struct work_struct	skip_run;
 	int			error;
+	int			aborting;
 };
 
 static struct ipu_scale_q_data *get_q_data(struct ipu_scale_ctx *ctx, enum v4l2_buf_type type)
@@ -115,6 +115,9 @@ static int job_ready(void *priv)
 {
 	struct ipu_scale_ctx *ctx = priv;
 
+	if (ctx->aborting)
+		return 0;
+
 	if (v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx) < 1
 	    || v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx) < 1) {
 		dev_dbg(ctx->ipu_scaler->dev, "Not enough buffers available\n");
@@ -126,6 +129,9 @@ static int job_ready(void *priv)
 
 static void job_abort(void *priv)
 {
+	struct ipu_scale_ctx *ctx = priv;
+
+	ctx->aborting = 1;
 }
 
 static void ipu_complete(void *priv, int err)
@@ -163,15 +169,12 @@ static void ipu_scaler_work(struct work_struct *work)
 	int err = -ETIMEDOUT;
 	unsigned long flags;
 
-	mutex_lock(&ctx->lock);
-
 	/*
 	 * If streamoff dequeued all buffers before we could get the lock,
 	 * just bail out immediately.
 	 */
 	if (!v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx) ||
 		!v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx)) {
-		mutex_unlock(&ctx->lock);
 		WARN_ON(1);
 		schedule_work(&ctx->skip_run);
 		return;
@@ -221,8 +224,6 @@ static void ipu_scaler_work(struct work_struct *work)
 	v4l2_m2m_buf_done(src_buf, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
 	v4l2_m2m_buf_done(dst_buf, err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
 	spin_unlock_irqrestore(&ipu_scaler->irqlock, flags);
-
-	mutex_unlock(&ctx->lock);
 
 	v4l2_m2m_job_finish(ipu_scaler->m2m_dev, ctx->fh.m2m_ctx);
 }
@@ -593,7 +594,6 @@ static int ipu_scale_open(struct file *file)
 	file->private_data = &ctx->fh;
 	v4l2_fh_add(&ctx->fh);
 	ctx->ipu_scaler = ipu_scaler;
-	mutex_init(&ctx->lock);
 
 	ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(ipu_scaler->m2m_dev, ctx, &queue_init);
 	if (IS_ERR(ctx->fh.m2m_ctx)) {
