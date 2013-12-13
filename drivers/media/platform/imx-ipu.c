@@ -109,6 +109,7 @@ static struct ipu_fmt *ipu_find_fmt(unsigned long pixelformat)
 
 	return fmt;
 }
+EXPORT_SYMBOL_GPL(ipu_find_fmt);
 
 int ipu_try_fmt(struct file *file, void *fh,
 		struct v4l2_format *f)
@@ -135,6 +136,7 @@ int ipu_try_fmt(struct file *file, void *fh,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_try_fmt);
 
 int ipu_try_fmt_rgb(struct file *file, void *fh,
 		struct v4l2_format *f)
@@ -147,6 +149,7 @@ int ipu_try_fmt_rgb(struct file *file, void *fh,
 
 	return ipu_try_fmt(file, fh, f);
 }
+EXPORT_SYMBOL_GPL(ipu_try_fmt_rgb);
 
 int ipu_try_fmt_yuv(struct file *file, void *fh,
 		struct v4l2_format *f)
@@ -159,6 +162,7 @@ int ipu_try_fmt_yuv(struct file *file, void *fh,
 
 	return ipu_try_fmt(file, fh, f);
 }
+EXPORT_SYMBOL_GPL(ipu_try_fmt_yuv);
 
 int ipu_enum_fmt_rgb(struct file *file, void *fh,
 		struct v4l2_fmtdesc *f)
@@ -175,6 +179,7 @@ int ipu_enum_fmt_rgb(struct file *file, void *fh,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_enum_fmt_rgb);
 
 int ipu_enum_fmt_yuv(struct file *file, void *fh,
 		struct v4l2_fmtdesc *f)
@@ -191,6 +196,7 @@ int ipu_enum_fmt_yuv(struct file *file, void *fh,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_enum_fmt_yuv);
 
 int ipu_enum_fmt(struct file *file, void *fh,
 		struct v4l2_fmtdesc *f)
@@ -212,6 +218,7 @@ int ipu_enum_fmt(struct file *file, void *fh,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_enum_fmt);
 
 int ipu_s_fmt(struct file *file, void *fh,
 		struct v4l2_format *f, struct v4l2_pix_format *pix)
@@ -231,6 +238,7 @@ int ipu_s_fmt(struct file *file, void *fh,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_s_fmt);
 
 int ipu_s_fmt_rgb(struct file *file, void *fh,
 		struct v4l2_format *f, struct v4l2_pix_format *pix)
@@ -243,6 +251,7 @@ int ipu_s_fmt_rgb(struct file *file, void *fh,
 
 	return ipu_s_fmt(file, fh, f, pix);
 }
+EXPORT_SYMBOL_GPL(ipu_s_fmt_rgb);
 
 int ipu_s_fmt_yuv(struct file *file, void *fh,
 		struct v4l2_format *f, struct v4l2_pix_format *pix)
@@ -255,6 +264,7 @@ int ipu_s_fmt_yuv(struct file *file, void *fh,
 
 	return ipu_s_fmt(file, fh, f, pix);
 }
+EXPORT_SYMBOL_GPL(ipu_s_fmt_yuv);
 
 int ipu_g_fmt(struct v4l2_format *f, struct v4l2_pix_format *pix)
 {
@@ -269,6 +279,7 @@ int ipu_g_fmt(struct v4l2_format *f, struct v4l2_pix_format *pix)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_g_fmt);
 
 int ipu_enum_framesizes(struct file *file, void *fh,
 			struct v4l2_frmsizeenum *fsize)
@@ -291,3 +302,4 @@ int ipu_enum_framesizes(struct file *file, void *fh,
 
         return 0;
 }
+EXPORT_SYMBOL_GPL(ipu_enum_framesizes);
