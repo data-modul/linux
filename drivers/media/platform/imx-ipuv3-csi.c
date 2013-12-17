@@ -221,7 +221,6 @@ struct ipucsi_buffer {
 	struct vb2_buffer		vb;
 	enum v4l2_mbus_pixelcode	code;
 	struct list_head		queue;
-	int				init;
 };
 
 struct ipucsi {
@@ -566,7 +565,7 @@ static void ipucsi_videobuf_release(struct vb2_buffer *vb)
 	if (ipucsi->active == buf)
 		ipucsi->active = NULL;
 
-	if (buf->init)
+	if (!list_empty(&buf->queue))
 		list_del_init(&buf->queue);
 
 	spin_unlock_irqrestore(&ipucsi->lock, flags);
@@ -578,8 +577,6 @@ static int ipucsi_videobuf_init(struct vb2_buffer *vb)
 
 	/* This is for locking debugging only */
 	INIT_LIST_HEAD(&buf->queue);
-
-	buf->init = 1;
 
 	return 0;
 }
@@ -724,6 +721,7 @@ free_irq:
 static int ipucsi_videobuf_stop_streaming(struct vb2_queue *vq)
 {
 	struct ipucsi *ipucsi = vq->drv_priv;
+	unsigned long flags;
 	int nfack_irq = ipu_idmac_channel_irq(ipucsi->ipu, ipucsi->ipuch,
 				IPU_IRQ_NFACK);
 
@@ -732,7 +730,10 @@ static int ipucsi_videobuf_stop_streaming(struct vb2_queue *vq)
 	ipu_idmac_disable_channel(ipucsi->ipuch);
 	ipu_smfc_disable(ipucsi->ipu);
 
-	INIT_LIST_HEAD(&ipucsi->capture);
+	spin_lock_irqsave(&ipucsi->lock, flags);
+	while (!list_empty(&ipucsi->capture))
+		list_del_init(ipucsi->capture.next);
+	spin_unlock_irqrestore(&ipucsi->lock, flags);
 
 	media_entity_pipeline_stop(&ipucsi->subdev.entity);
 
