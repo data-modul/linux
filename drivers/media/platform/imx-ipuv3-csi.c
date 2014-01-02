@@ -259,6 +259,7 @@ struct ipucsi {
 	struct media_pad		subdev_pad[2];
 	struct v4l2_mbus_framefmt	format_mbus[2];
 	struct ipu_media_link		*link;
+	struct v4l2_fh			fh;
 };
 
 static struct ipucsi_buffer *to_ipucsi_vb(struct vb2_buffer *vb)
@@ -766,14 +767,6 @@ static struct vb2_ops ipucsi_videobuf_ops = {
 	.wait_finish		= ipucsi_lock,
 };
 
-static int ipucsi_reqbufs(struct file *file, void *priv,
-			    struct v4l2_requestbuffers *reqbufs)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_reqbufs(&ipucsi->vb2_vidq, reqbufs);
-}
-
 static int ipucsi_querycap(struct file *file, void *priv,
 					struct v4l2_capability *cap)
 {
@@ -783,54 +776,6 @@ static int ipucsi_querycap(struct file *file, void *priv,
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
 
 	return 0;
-}
-
-static int ipucsi_querybuf(struct file *file, void *priv,
-			   struct v4l2_buffer *buf)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_querybuf(&ipucsi->vb2_vidq, buf);
-}
-
-static int ipucsi_qbuf(struct file *file, void *priv,
-			  struct v4l2_buffer *buf)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_qbuf(&ipucsi->vb2_vidq, buf);
-}
-
-static int ipucsi_expbuf(struct file *file, void *priv,
-			  struct v4l2_exportbuffer *eb)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_expbuf(&ipucsi->vb2_vidq, eb);
-}
-
-static int ipucsi_dqbuf(struct file *file, void *priv,
-			   struct v4l2_buffer *buf)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_dqbuf(&ipucsi->vb2_vidq, buf, file->f_flags & O_NONBLOCK);
-}
-
-static int ipucsi_streamon(struct file *file, void *priv,
-			       enum v4l2_buf_type i)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_streamon(&ipucsi->vb2_vidq, i);
-}
-
-static int ipucsi_streamoff(struct file *file, void *priv,
-				enum v4l2_buf_type i)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-
-	return vb2_streamoff(&ipucsi->vb2_vidq, i);
 }
 
 static int ipucsi_try_fmt(struct file *file, void *fh,
@@ -1150,12 +1095,18 @@ disable:
 static int ipucsi_open(struct file *file)
 {
 	struct ipucsi *ipucsi = video_drvdata(file);
-	int ret = 0;
+	int ret;
 
-	ret = v4l2_media_subdev_s_power(ipucsi, 1);
+	mutex_lock(&ipucsi->mutex);
+	ret = v4l2_fh_open(file);
 	if (ret)
-		return ret;
+		goto out;
 
+	if (v4l2_fh_is_singular_file(file))
+		ret = v4l2_media_subdev_s_power(ipucsi, 1);
+
+out:
+	mutex_unlock(&ipucsi->mutex);
 	return ret;
 }
 
@@ -1163,30 +1114,19 @@ static int ipucsi_release(struct file *file)
 {
 	struct ipucsi *ipucsi = video_drvdata(file);
 
-	v4l2_media_subdev_s_power(ipucsi, 0);
-
-	v4l2_ctrl_handler_free(&ipucsi->ctrls_vdev);
-
 	mutex_lock(&ipucsi->mutex);
-	vb2_queue_release(&ipucsi->vb2_vidq);
-	mutex_unlock(&ipucsi->mutex);
+	if (v4l2_fh_is_singular_file(file)) {
+		v4l2_media_subdev_s_power(ipucsi, 0);
 
+		v4l2_ctrl_handler_free(&ipucsi->ctrls_vdev);
+
+		vb2_fop_release(file);
+	} else {
+		v4l2_fh_release(file);
+	}
+
+	mutex_unlock(&ipucsi->mutex);
 	return 0;
-}
-
-static int ipucsi_capture_mmap(struct file *file, struct vm_area_struct *vma)
-{
-	struct ipucsi *ipucsi = video_drvdata(file);
-	int ret;
-
-	if (mutex_lock_interruptible(&ipucsi->mutex))
-		return -ERESTARTSYS;
-
-	ret = vb2_mmap(&ipucsi->vb2_vidq, vma);
-
-	mutex_unlock(&ipucsi->mutex);
-
-	return ret;
 }
 
 static u64 camera_mask = DMA_BIT_MASK(32);
@@ -1196,7 +1136,7 @@ static const struct v4l2_file_operations ipucsi_capture_fops = {
 	.open		= ipucsi_open,
 	.release	= ipucsi_release,
 	.unlocked_ioctl	= video_ioctl2,
-	.mmap		= ipucsi_capture_mmap,
+	.mmap		= vb2_fop_mmap,
 };
 
 static int ipucsi_enum_framesizes(struct file *file, void *fh,
@@ -1243,15 +1183,15 @@ static const struct v4l2_ioctl_ops ipucsi_capture_ioctl_ops = {
 	.vidioc_s_fmt_vid_cap		= ipucsi_s_fmt,
 	.vidioc_g_fmt_vid_cap		= ipucsi_g_fmt,
 
-	.vidioc_reqbufs			= ipucsi_reqbufs,
-	.vidioc_querybuf		= ipucsi_querybuf,
+	.vidioc_reqbufs			= vb2_ioctl_reqbufs,
+	.vidioc_querybuf		= vb2_ioctl_querybuf,
 
-	.vidioc_qbuf			= ipucsi_qbuf,
-	.vidioc_dqbuf			= ipucsi_dqbuf,
-	.vidioc_expbuf			= ipucsi_expbuf,
+	.vidioc_qbuf			= vb2_ioctl_qbuf,
+	.vidioc_dqbuf			= vb2_ioctl_dqbuf,
+	.vidioc_expbuf			= vb2_ioctl_expbuf,
 
-	.vidioc_streamon		= ipucsi_streamon,
-	.vidioc_streamoff		= ipucsi_streamoff,
+	.vidioc_streamon		= vb2_ioctl_streamon,
+	.vidioc_streamoff		= vb2_ioctl_streamoff,
 
 	.vidioc_enum_framesizes		= ipucsi_enum_framesizes,
 };
@@ -1383,6 +1323,7 @@ static int ipucsi_video_device_init(struct platform_device *pdev,
 	vdev->release	= video_device_release_empty;
 	vdev->lock	= &ipucsi->mutex;
 	vdev->ctrl_handler = &ipucsi->ctrls_vdev;
+	vdev->queue	= &ipucsi->vb2_vidq;
 
 	video_set_drvdata(vdev, ipucsi);
 
