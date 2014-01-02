@@ -713,8 +713,8 @@ static int ipu_scale_probe(struct platform_device *pdev)
 	video_set_drvdata(vfd, ipu_scaler);
 	snprintf(vfd->name, sizeof(vfd->name), "%s", ipu_scale_videodev.name);
 	ipu_scaler->vfd = vfd;
-	dev_info(ipu_scaler->dev, MEM2MEM_NAME
-			"Device registered as /dev/video%d\n", vfd->num);
+	dev_dbg(ipu_scaler->dev, "Device registered as /dev/video%d\n",
+		vfd->num);
 
 	platform_set_drvdata(pdev, ipu_scaler);
 
