@@ -710,8 +710,7 @@ static int ipu_vdic_probe(struct platform_device *pdev)
 	video_set_drvdata(vfd, ipu_vdic);
 	snprintf(vfd->name, sizeof(vfd->name), "%s", ipu_vdic_videodev.name);
 	ipu_vdic->vfd = vfd;
-	dev_info(ipu_vdic->dev, MEM2MEM_NAME
-			"Device registered as /dev/video%d\n", vfd->num);
+	dev_dbg(ipu_vdic->dev, "Device registered as /dev/video%d\n", vfd->num);
 
 	platform_set_drvdata(pdev, ipu_vdic);
 
