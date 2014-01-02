@@ -49,5 +49,6 @@ config DRM_IMX_IPUV3
 config DRM_IMX_HDMI
 	tristate "Freescale i.MX DRM HDMI"
 	depends on DRM_IMX
+	select SND_PCM
 	help
 	  Choose this if you want to use HDMI on i.MX6.
