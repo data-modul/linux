@@ -132,6 +132,9 @@ struct imx_hdmi {
 	struct regmap *regmap;
 	struct i2c_adapter *ddc;
 	void __iomem *regs;
+	u8 sink_detect_polarity;
+	u8 sink_detect_status;
+	u8 sink_detect_mask;
 
 	unsigned int sample_rate;
 	int ratio;
@@ -1306,10 +1309,10 @@ static int imx_hdmi_fb_registered(struct imx_hdmi *hdmi)
 		    HDMI_PHY_I2CM_CTLINT_ADDR);
 
 	/* enable cable hot plug irq */
-	hdmi_writeb(hdmi, (u8)~HDMI_PHY_HPD, HDMI_PHY_MASK0);
+	hdmi_writeb(hdmi, hdmi->sink_detect_mask, HDMI_PHY_MASK0);
 
 	/* Clear Hotplug interrupts */
-	hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD, HDMI_IH_PHY_STAT0);
+	hdmi_writeb(hdmi, hdmi->sink_detect_status, HDMI_IH_PHY_STAT0);
 
 	return 0;
 }
@@ -1536,18 +1539,19 @@ static irqreturn_t imx_hdmi_irq(int irq, void *dev_id)
 
 	phy_int_pol = hdmi_readb(hdmi, HDMI_PHY_POL0);
 
-	if (intr_stat & HDMI_IH_PHY_STAT0_HPD) {
-		if (phy_int_pol & HDMI_PHY_HPD) {
+	if (intr_stat & hdmi->sink_detect_status) {
+		int pol_bit = hdmi->sink_detect_polarity;
+
+		if (phy_int_pol & pol_bit) {
 			dev_dbg(hdmi->dev, "EVENT=plugin\n");
 
-			hdmi_modb(hdmi, 0, HDMI_PHY_HPD, HDMI_PHY_POL0);
+			hdmi_modb(hdmi, 0, pol_bit, HDMI_PHY_POL0);
 
 			imx_hdmi_poweron(hdmi);
 		} else {
 			dev_dbg(hdmi->dev, "EVENT=plugout\n");
 
-			hdmi_modb(hdmi, HDMI_PHY_HPD, HDMI_PHY_HPD,
-				HDMI_PHY_POL0);
+			hdmi_modb(hdmi, pol_bit, pol_bit, HDMI_PHY_POL0);
 
 			imx_hdmi_poweroff(hdmi);
 		}
@@ -1555,7 +1559,7 @@ static irqreturn_t imx_hdmi_irq(int irq, void *dev_id)
 	}
 
 	hdmi_writeb(hdmi, intr_stat, HDMI_IH_PHY_STAT0);
-	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
+	hdmi_writeb(hdmi, ~hdmi->sink_detect_status, HDMI_IH_MUTE_PHY_STAT0);
 
 	return IRQ_HANDLED;
 }
@@ -1707,14 +1711,24 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	 */
 	hdmi_init_clk_regenerator(hdmi);
 
+	hdmi->sink_detect_status = HDMI_IH_PHY_STAT0_HPD;
+	hdmi->sink_detect_polarity = HDMI_PHY_HPD;
+	hdmi->sink_detect_mask = ~HDMI_PHY_HPD;
+
+	if (of_property_read_bool(np, "hpd-unreliable")) {
+		hdmi->sink_detect_status = HDMI_IH_PHY_STAT0_RX_SENSE0;
+		hdmi->sink_detect_polarity = HDMI_PHY_RX_SENSE0;
+		hdmi->sink_detect_mask = ~HDMI_PHY_RX_SENSE0;
+	}
+
 	/*
 	 * Configure registers related to HDMI interrupt
 	 * generation before registering IRQ.
 	 */
-	hdmi_writeb(hdmi, HDMI_PHY_HPD, HDMI_PHY_POL0);
+	hdmi_writeb(hdmi, hdmi->sink_detect_polarity, HDMI_PHY_POL0);
 
 	/* Clear Hotplug interrupts */
-	hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD, HDMI_IH_PHY_STAT0);
+	hdmi_writeb(hdmi, hdmi->sink_detect_status, HDMI_IH_PHY_STAT0);
 
 	ret = imx_hdmi_fb_registered(hdmi);
 	if (ret)
@@ -1725,7 +1739,7 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 		goto err_iahb;
 
 	/* Unmute interrupts */
-	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
+	hdmi_writeb(hdmi, ~hdmi->sink_detect_status, HDMI_IH_MUTE_PHY_STAT0);
 
 	dev_set_drvdata(dev, hdmi);
 
