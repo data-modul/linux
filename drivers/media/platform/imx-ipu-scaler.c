@@ -292,7 +292,18 @@ static int vidioc_g_fmt_vid_cap(struct file *file, void *priv,
 static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 				  struct v4l2_format *f)
 {
-	return ipu_try_fmt(file, priv, f);
+	struct ipu_fmt *fmt;
+	int ret;
+
+	ret = ipu_try_fmt(file, priv, f);
+
+	/*
+	 * Leave enough output space for worst-case overhead caused by 8 pixel
+	 * burst size: 7 RGBA pixels.
+	 */
+	f->fmt.pix.sizeimage += 7 * 4;
+
+	return ret;
 }
 
 static int vidioc_try_fmt_vid_out(struct file *file, void *priv,
@@ -308,6 +319,8 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	struct ipu_scale_q_data *q_data;
 	struct vb2_queue *vq;
 	struct ipu_scale_ctx *ctx = fh_to_ctx(priv);
+	struct v4l2_pix_format *pix;
+	struct ipu_fmt *fmt;
 	int ret;
 
 	vq = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, f->type);
@@ -326,6 +339,13 @@ static int vidioc_s_fmt(struct file *file, void *priv,
 	ret = ipu_s_fmt(file, priv, f, &q_data->cur_fmt);
 	if (ret < 0)
 		return ret;
+
+	/*
+	 * Leave enough output space for worst-case overhead caused by 8 pixel
+	 * burst size: 7 RGBA pixels.
+	 */
+	f->fmt.pix.sizeimage += 7 * 4;
+	q_data->cur_fmt.sizeimage = f->fmt.pix.sizeimage;
 
 	/* Reset cropping/composing rectangle */
 	q_data->rect.left = 0;
