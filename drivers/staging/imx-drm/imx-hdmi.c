@@ -1728,7 +1728,7 @@ static int imx_hdmi_bind(struct device *dev, struct device *master, void *data)
 	hdmi_writeb(hdmi, hdmi->sink_detect_polarity, HDMI_PHY_POL0);
 
 	/* Clear Hotplug interrupts */
-	hdmi_writeb(hdmi, hdmi->sink_detect_status, HDMI_IH_PHY_STAT0);
+	hdmi_writeb(hdmi, 0x3d, HDMI_IH_PHY_STAT0);
 
 	ret = imx_hdmi_fb_registered(hdmi);
 	if (ret)
