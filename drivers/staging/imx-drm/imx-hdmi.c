@@ -32,8 +32,6 @@
 #include "imx-hdmi.h"
 #include "imx-drm.h"
 
-#define HDMI_EDID_LEN		512
-
 #define RGB			0
 #define YCBCR444		1
 #define YCBCR422_16BITS		2
@@ -123,7 +121,7 @@ struct imx_hdmi {
 	struct hdmi_data_info hdmi_data;
 	int vic;
 
-	u8 edid[HDMI_EDID_LEN];
+	struct edid *edid;
 	bool cable_plugin;
 
 	bool phy_enabled;
@@ -1408,8 +1406,7 @@ static int imx_hdmi_connector_get_modes(struct drm_connector *connector)
 {
 	struct imx_hdmi *hdmi = container_of(connector, struct imx_hdmi,
 					     connector);
-	struct edid *edid;
-	int ret;
+	int ret = 0;
 
 	if (!hdmi->ddc)
 		return 0;
@@ -1423,10 +1420,10 @@ static int imx_hdmi_connector_get_modes(struct drm_connector *connector)
 		ret = drm_add_edid_modes(connector, edid);
 		kfree(edid);
 	} else {
-		dev_dbg(hdmi->dev, "failed to get edid\n");
+		dev_dbg(hdmi->dev, "failed to get edid modes\n");
 	}
 
-	return 0;
+	return ret;
 }
 
 static struct drm_encoder *imx_hdmi_connector_best_encoder(struct drm_connector
@@ -1533,25 +1530,10 @@ static irqreturn_t imx_hdmi_irq(int irq, void *dev_id)
 	u8 phy_int_pol;
 
 	intr_stat = hdmi_readb(hdmi, HDMI_IH_PHY_STAT0);
-
 	phy_int_pol = hdmi_readb(hdmi, HDMI_PHY_POL0);
 
 	if (intr_stat & hdmi->sink_detect_status) {
-		int pol_bit = hdmi->sink_detect_polarity;
-
-		if (phy_int_pol & pol_bit) {
-			dev_dbg(hdmi->dev, "EVENT=plugin\n");
-
-			hdmi_modb(hdmi, 0, pol_bit, HDMI_PHY_POL0);
-
-			imx_hdmi_poweron(hdmi);
-		} else {
-			dev_dbg(hdmi->dev, "EVENT=plugout\n");
-
-			hdmi_modb(hdmi, pol_bit, pol_bit, HDMI_PHY_POL0);
-
-			imx_hdmi_poweroff(hdmi);
-		}
+		hdmi_modb(hdmi, ~phy_int_pol, ~hdmi->sink_detect_mask, HDMI_PHY_POL0);
 		drm_helper_hpd_irq_event(hdmi->connector.dev);
 	}
 
