@@ -89,6 +89,7 @@ struct vout_data {
 	struct ipu_image	out_image; /* output image */
 	struct ipu_image	in_image; /* input image */
 	struct v4l2_window	win; /* user selected output window (after scaler) */
+	struct v4l2_rect	crop; /* cropping rectangle in the input image */
 
 	struct list_head	idle_list;
 	struct list_head	scale_list;
@@ -107,9 +108,32 @@ static int vidioc_querycap(struct file *file, void  *priv,
 {
 	strcpy(cap->driver, "i.MX v4l2 output");
 	cap->version = 0;
-	cap->capabilities = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_STREAMING | V4L2_CAP_VIDEO_OVERLAY;
+	cap->capabilities = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_STREAMING;
 	cap->card[0] = '\0';
 	cap->bus_info[0] = '\0';
+
+	return 0;
+}
+
+static int vidioc_cropcap(struct file *file, void *priv,
+		struct v4l2_cropcap *cropcap)
+{
+	struct video_device *dev = video_devdata(file);
+	struct vout_data *vout = video_get_drvdata(dev);
+
+	if (cropcap->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
+		return -EINVAL;
+
+	cropcap->bounds.left = 0;
+	cropcap->bounds.top = 0;
+	cropcap->bounds.width = vout->width_base;
+	cropcap->bounds.height = vout->height_base;
+	cropcap->defrect.left = 0;
+	cropcap->defrect.top = 0;
+	cropcap->defrect.width = vout->width_base;
+	cropcap->defrect.height = vout->height_base;
+	cropcap->pixelaspect.numerator = 1;
+	cropcap->pixelaspect.denominator = 1;
 
 	return 0;
 }
@@ -120,8 +144,7 @@ static int ipu_ovl_vidioc_g_fmt_vid_out(struct file *file, void *fh,
 	struct video_device *dev = video_devdata(file);
 	struct vout_data *vout = video_get_drvdata(dev);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_OUTPUT &&
-		f->type != V4L2_BUF_TYPE_VIDEO_OVERLAY)
+	if (f->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
 		return -EINVAL;
 
 	return ipu_g_fmt(f, &vout->out_image.pix);
@@ -152,6 +175,7 @@ static void ipu_ovl_sanitize(struct vout_data *vout)
 	struct ipu_image *in = &vout->in_image;
 	struct ipu_image *out = &vout->out_image;
 	struct v4l2_window *win = &vout->win;
+	struct v4l2_rect *crop = &vout->crop;
 
 	ipu_ovl_get_base_resolution(vout);
 
@@ -160,18 +184,16 @@ static void ipu_ovl_sanitize(struct vout_data *vout)
 		win->w.left = 0;
 	if (win->w.top  < 0)
 		win->w.top = 0;
-	if (win->w.left + win->w.width > vout->width_base)
-		win->w.left = vout->width_base - win->w.width;
-	if (win->w.top + win->w.height > vout->height_base)
-		win->w.top = vout->height_base - win->w.height;
+	win->w.width = vout->width_base;
+	win->w.height = vout->height_base;
 
-	dev_dbg(vout->dev, "start: win:  %dx%d@%dx%d\n",
+	dev_info(vout->dev, "start: win:  %dx%d@%dx%d\n",
 			win->w.width, win->w.height, win->w.left, win->w.top);
 
-	in->rect.left = 0;
-	in->rect.width = in->pix.width;
-	in->rect.top = 0;
-	in->rect.height = in->pix.height;
+	in->rect.left = crop->left;
+	in->rect.width = crop->width;
+	in->rect.top = crop->top;
+	in->rect.height = crop->height;
 
 	out->pix.width = win->w.width;
 	out->pix.height = win->w.height;
@@ -208,55 +230,34 @@ static int ipu_ovl_vidioc_s_fmt_vid_out(struct file *file, void *fh,
 	vout->win.w.width = pix->width;
 	vout->win.w.height = pix->height;
 
+	vout->crop.left = 0;
+	vout->crop.top = 0;
+	vout->crop.width = pix->width;
+	vout->crop.height = pix->height;
+
 	ipu_ovl_sanitize(vout);
 
 	return 0;
 }
 
-static int ipu_ovl_vidioc_g_fmt_vid_overlay(struct file *file, void *fh,
-					struct v4l2_format *f)
+static int ipu_ovl_vidioc_g_crop(struct file *file, void *fh,
+				 struct v4l2_crop *crop)
 {
 	struct video_device *dev = video_devdata(file);
 	struct vout_data *vout = video_get_drvdata(dev);
 
-	f->fmt.win = vout->win;
+	crop->c = vout->crop;
 
 	return 0;
 }
 
-static int ipu_ovl_vidioc_try_fmt_vid_overlay(struct file *file, void *fh,
-					struct v4l2_format *f)
+static int ipu_ovl_vidioc_s_crop(struct file *file, void *fh,
+				 const struct v4l2_crop *crop)
 {
 	struct video_device *dev = video_devdata(file);
 	struct vout_data *vout = video_get_drvdata(dev);
-	struct v4l2_window *win = &f->fmt.win;
 
-	win->w.width &= ~0x3;
-	win->w.height &= ~0x1;
-
-	dev_dbg(vout->dev, "%s: %dx%d@%dx%d \n", __func__,
-			win->w.width, win->w.height, win->w.left, win->w.top);
-
-	return 0;
-}
-
-static int ipu_ovl_vidioc_s_fmt_vid_overlay(struct file *file, void *fh,
-					struct v4l2_format *f)
-{
-	struct video_device *dev = video_devdata(file);
-	struct vout_data *vout = video_get_drvdata(dev);
-	struct v4l2_window *win = &f->fmt.win;
-
-	win->w.width &= ~0x3;
-	win->w.height &= ~0x1;
-
-	dev_dbg(vout->dev, "%s: %dx%d@%dx%d \n", __func__,
-			win->w.width, win->w.height, win->w.left, win->w.top);
-
-	vout->win.w.width = win->w.width;
-	vout->win.w.height = win->w.height;
-	vout->win.w.left = win->w.left;
-	vout->win.w.top = win->w.top;
+	vout->crop = crop->c;
 
 	ipu_ovl_sanitize(vout);
 
@@ -726,16 +727,15 @@ static int mxc_v4l2out_close(struct file *file)
 
 static const struct v4l2_ioctl_ops mxc_ioctl_ops = {
 	.vidioc_querycap		= vidioc_querycap,
+	.vidioc_cropcap			= vidioc_cropcap,
 
 	.vidioc_enum_fmt_vid_out	= ipu_ovl_vidioc_enum_fmt_vid_out,
 	.vidioc_g_fmt_vid_out		= ipu_ovl_vidioc_g_fmt_vid_out,
 	.vidioc_s_fmt_vid_out		= ipu_ovl_vidioc_s_fmt_vid_out,
 	.vidioc_try_fmt_vid_out		= ipu_ovl_vidioc_try_fmt_vid_out,
 
-	.vidioc_enum_fmt_vid_overlay	= ipu_ovl_vidioc_enum_fmt_vid_out,
-	.vidioc_g_fmt_vid_out_overlay	= ipu_ovl_vidioc_g_fmt_vid_overlay,
-	.vidioc_s_fmt_vid_out_overlay	= ipu_ovl_vidioc_s_fmt_vid_overlay,
-	.vidioc_try_fmt_vid_out_overlay	= ipu_ovl_vidioc_try_fmt_vid_overlay,
+	.vidioc_s_crop			= ipu_ovl_vidioc_s_crop,
+	.vidioc_g_crop			= ipu_ovl_vidioc_g_crop,
 
 	.vidioc_reqbufs			= ipu_ovl_vidioc_reqbufs,
 	.vidioc_querybuf		= ipu_ovl_vidioc_querybuf,
