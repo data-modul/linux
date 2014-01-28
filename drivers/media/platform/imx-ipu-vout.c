@@ -141,7 +141,7 @@ static int ipu_ovl_vidioc_try_fmt_vid_out(struct file *file, void *fh,
  */
 static void ipu_ovl_get_base_resolution(struct vout_data *vout)
 {
-	struct ipu_ch_param *cpmem_base = vout->ipu->cpmem_base + 23;
+	struct ipu_ch_param *cpmem_base = ipu_get_cpmem(vout->ipu_ch);
 
 	vout->width_base = ipu_ch_param_read_field(cpmem_base, IPU_FIELD_FW) + 1;
 	vout->height_base = ipu_ch_param_read_field(cpmem_base, IPU_FIELD_FH) + 1;
