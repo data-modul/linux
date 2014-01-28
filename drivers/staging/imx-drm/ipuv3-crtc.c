@@ -331,7 +331,7 @@ static int ipu_vout_init(struct ipu_crtc *ipu_crtc)
 	pdata.ipu_ch = ipu_crtc->plane[0]->ipu_ch;
 
 	pdev = platform_device_register_data(ipu_crtc->dev, "imx-ipuv3-vout",
-		0, &pdata, sizeof(pdata));
+		imx_drm_crtc_id(ipu_crtc->imx_crtc), &pdata, sizeof(pdata));
 
 	return 0;
 }
