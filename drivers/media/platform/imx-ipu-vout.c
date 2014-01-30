@@ -51,7 +51,6 @@ struct vout_buffer {
 enum {
 	VOUT_IDLE,
 	VOUT_STARTING,
-	VOUT_ENABLING,
 	VOUT_RUNNING,
 	VOUT_STOPPING,
 };
@@ -301,13 +300,6 @@ static irqreturn_t vout_handler(int irq, void *context)
 	struct ipu_ch_param *cpmem = ipu_get_cpmem(vout->ipu_ch);
 	int current_active = ipu_idmac_get_current_buffer(vout->ipu_ch);
 
-	if (vout->status == VOUT_ENABLING) {
-		vout_enable(vout->next_showing);
-		vout->status = VOUT_RUNNING;
-		vout->next_showing = NULL;
-		return IRQ_HANDLED;
-	}
-
 	spin_lock_irqsave(&vout->lock, flags);
 
 	if(vout->status == VOUT_IDLE)
@@ -327,10 +319,6 @@ static irqreturn_t vout_handler(int irq, void *context)
 		list_splice_tail_init(&vout->show_list, &vout->idle_list);
 
 		vout->status = VOUT_IDLE;
-
-		ipu_dp_setup_channel(vout->dp,
-				IPUV3_COLORSPACE_RGB,
-				IPUV3_COLORSPACE_RGB);
 
 		ipu_cpmem_set_buffer(cpmem, !current_active, ipu_cpmem_get_buffer(&vout->cpmem_saved, 0));
 		ipu_idmac_select_buffer(vout->ipu_ch, !current_active);
@@ -431,8 +419,8 @@ static void vout_scaler_complete(void *context, int err)
 		list_move_tail(&q->list, &vout->idle_list);
 
 	if (vout->status == VOUT_STARTING) {
-		vout->next_showing = q;
-		vout->status = VOUT_ENABLING;
+		vout_enable(q);
+		vout->status = VOUT_RUNNING;
 	}
 
 	spin_unlock_irqrestore(&vout->lock, flags);
@@ -512,7 +500,7 @@ static int vout_videobuf_start_streaming(struct vb2_queue *vq, unsigned int coun
 	if (vout->status != VOUT_IDLE)
 		return -EINVAL;
 
-	ret = request_threaded_irq(vout->irq, NULL, vout_handler, IRQF_ONESHOT | IRQF_SHARED,
+	ret = request_irq(vout->irq, vout_handler, IRQF_ONESHOT | IRQF_SHARED,
 				   "imx-ipu-vout", vout);
 	if (ret) {
 		dev_err(vout->dev, "failed to request irq: %d\n", ret);
@@ -525,10 +513,12 @@ static int vout_videobuf_start_streaming(struct vb2_queue *vq, unsigned int coun
 
 	if (!list_empty(&vout->show_list)) {
 		q = list_first_entry(&vout->show_list, struct vout_queue, list);
-		vout->next_showing = q;
-		vout->status = VOUT_ENABLING;
+		spin_unlock_irqrestore(&vout->lock, flags);
+		vout_enable(q);
+		vout->status = VOUT_RUNNING;
+	}else {
+		spin_unlock_irqrestore(&vout->lock, flags);
 	}
-	spin_unlock_irqrestore(&vout->lock, flags);
 
 	return 0;
 }
