@@ -1221,13 +1221,10 @@ static int imx_hdmi_setup(struct imx_hdmi *hdmi, struct drm_display_mode *mode)
 
 	hdmi->vic = drm_match_cea_mode(mode);
 
-	if (!hdmi->vic) {
-		dev_dbg(hdmi->dev, "Non-CEA mode used in HDMI\n");
-		hdmi->hdmi_data.video_mode.mdvi = true;
-	} else {
-		dev_dbg(hdmi->dev, "CEA mode used vic=%d\n", hdmi->vic);
+	if (drm_detect_hdmi_monitor(hdmi->edid) && hdmi->vic)
 		hdmi->hdmi_data.video_mode.mdvi = false;
-	}
+	else
+		hdmi->hdmi_data.video_mode.mdvi = true;
 
 	if ((hdmi->vic == 6) || (hdmi->vic == 7) ||
 		(hdmi->vic == 21) || (hdmi->vic == 22) ||
@@ -1276,7 +1273,7 @@ static int imx_hdmi_setup(struct imx_hdmi *hdmi, struct drm_display_mode *mode)
 	if (hdmi->hdmi_data.video_mode.mdvi)
 		dev_dbg(hdmi->dev, "%s DVI mode\n", __func__);
 	else {
-		dev_dbg(hdmi->dev, "%s CEA mode\n", __func__);
+		dev_dbg(hdmi->dev, "%s CEA mode VIC=%d\n", __func__, hdmi->vic);
 
 		/* HDMI Initialization Step E - Configure audio */
 		hdmi_clk_regenerator_update_pixel_clock(hdmi);
