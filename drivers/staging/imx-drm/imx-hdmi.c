@@ -1211,6 +1211,9 @@ static int imx_hdmi_setup(struct imx_hdmi *hdmi, struct drm_display_mode *mode)
 {
 	int ret;
 
+	/* FIXME: add delay to avoid lila line */
+	udelay(500);
+
 	hdmi_disable_overflow_interrupts(hdmi);
 
 	hdmi->vic = drm_match_cea_mode(mode);
