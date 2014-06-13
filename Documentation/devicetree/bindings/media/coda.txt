@@ -12,12 +12,16 @@ Required properties:
   (d) "fsl,imx6dl-vpu", "cnm,coda960" for CODA960 present in i.MX6DL/S
 - reg: should be register base and length as documented in the
   SoC reference manual
-- interrupts : Should contain the VPU interrupt. For CODA960,
-  a second interrupt is needed for the MJPEG unit.
+- interrupts : Should contain the VPU (BIT processor) interrupt.
+  For CODA960, a second interrupt is needed for the JPEG unit.
 - clocks : Should contain the ahb and per clocks, in the order
   determined by the clock-names property.
 - clock-names : Should be "ahb", "per"
 - iram : phandle pointing to the SRAM device node
+
+Optional properties:
+- interrupt-names: Should be "bit" for the BIT processor interrupt
+  and "jpeg" for the JPEG unit interrupt on CODA960.
 
 Example:
 
@@ -25,6 +29,7 @@ vpu: vpu@63ff4000 {
 	compatible = "fsl,imx53-vpu", "cnm,coda7541";
 	reg = <0x63ff4000 0x1000>;
 	interrupts = <9>;
+	interrupt-names = "bit";
 	clocks = <&clks 63>, <&clks 63>;
 	clock-names = "ahb", "per";
 	iram = <&ocram>;
