@@ -118,6 +118,21 @@
 	status = "okay";
 };
 
+&hdmi {
+	status = "okay";
+	hpd-unreliable;
+	ddc-i2c-bus = <&i2c3>;
+};
+
+/* make sure we connect HDMI to IPU2 */
+&hdmi_mux_0 {
+	status = "disabled";
+};
+
+&hdmi_mux_1 {
+	status = "disabled";
+};
+
 &i2c2 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";

@@ -1378,9 +1378,27 @@ static enum drm_connector_status imx_hdmi_connector_detect(struct drm_connector
 {
 	struct imx_hdmi *hdmi = container_of(connector, struct imx_hdmi,
 					     connector);
+	struct edid *edid;
 
-	return hdmi_readb(hdmi, HDMI_PHY_STAT0) & HDMI_PHY_HPD ?
-		connector_status_connected : connector_status_disconnected;
+	if (hdmi->ddc && drm_probe_ddc(hdmi->ddc)) {
+		edid = drm_get_edid(connector, hdmi->ddc);
+		if (edid) {
+			dev_dbg(hdmi->dev, "got edid: width[%d] x height[%d]\n",
+				edid->width_cm, edid->height_cm);
+
+			drm_mode_connector_update_edid_property(connector, edid);
+			kfree(edid);
+			return connector_status_connected;
+		} else {
+			dev_dbg(hdmi->dev, "failed to get edid\n");
+		}
+	}
+
+	/* if EDID probing fails, try if we can sense an attached display */
+	if (hdmi_readb(hdmi, HDMI_PHY_STAT0) & 0xf0)
+		return connector_status_connected;
+
+	return connector_status_disconnected;
 }
 
 static int imx_hdmi_connector_get_modes(struct drm_connector *connector)
