@@ -523,13 +523,13 @@ static int vout_videobuf_start_streaming(struct vb2_queue *vq, unsigned int coun
 	return 0;
 }
 
-static int vout_videobuf_stop_streaming(struct vb2_queue *vq)
+static void vout_videobuf_stop_streaming(struct vb2_queue *vq)
 {
 	struct vout_data *vout = vb2q_to_vout(vq);
 	unsigned long flags;
 
 	if (vout->status == VOUT_IDLE)
-		return 0;
+		return;
 
 	spin_lock_irqsave(&vout->lock, flags);
 
@@ -547,7 +547,7 @@ static int vout_videobuf_stop_streaming(struct vb2_queue *vq)
 
 	free_irq(vout->irq, vout);
 
-	return 0;
+	return;
 }
 
 static int vout_videobuf_init(struct vb2_buffer *vb)
@@ -691,7 +691,7 @@ static int mxc_v4l2out_open(struct file *file)
 	q->drv_priv = vout;
 	q->ops = &vout_videobuf_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
-	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->buf_struct_size = sizeof(struct vb2_buffer);
 
 	return vb2_queue_init(q);
