@@ -162,6 +162,8 @@ void ipu_dp_disable_channel(struct ipu_dp *dp);
 void ipu_dp_disable(struct ipu_soc *ipu);
 int ipu_dp_setup_channel(struct ipu_dp *dp,
 		enum ipu_color_space in, enum ipu_color_space out);
+int ipu_dp_get_channel(struct ipu_dp *dp,
+		enum ipu_color_space *in, enum ipu_color_space *out);
 int ipu_dp_set_window_pos(struct ipu_dp *, u16 x_pos, u16 y_pos);
 int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable, u8 alpha,
 		bool bg_chan);

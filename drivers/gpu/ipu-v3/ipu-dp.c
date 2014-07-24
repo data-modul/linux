@@ -215,6 +215,19 @@ int ipu_dp_setup_channel(struct ipu_dp *dp,
 }
 EXPORT_SYMBOL_GPL(ipu_dp_setup_channel);
 
+int ipu_dp_get_channel(struct ipu_dp *dp,
+		enum ipu_color_space *in,
+		enum ipu_color_space *out)
+{
+	struct ipu_flow *flow = to_flow(dp);
+
+	*in = dp->in_cs;
+	*out = flow->out_cs;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ipu_dp_get_channel);
+
 int ipu_dp_enable(struct ipu_soc *ipu)
 {
 	struct ipu_dp_priv *priv = ipu->dp_priv;
