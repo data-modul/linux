@@ -12,6 +12,7 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
  * for more details.
  */
+#define DEBUG
 #include <linux/export.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -472,8 +473,14 @@ static void ipu_di_config_clock(struct ipu_di *di,
 			unsigned div;
 
 			clk = di->clk_di;
+			dev_dbg(di->ipu->dev, "Using DI clock: %lu\n",
+				sig->pixelclock);
 
-			clk_set_rate(clk, sig->pixelclock);
+			clk = di->clk_di;
+			if (sig->pixelclock == 148500000)
+				clk_set_rate(clk, 144100000);
+			else
+				clk_set_rate(clk, sig->pixelclock);
 
 			in_rate = clk_get_rate(clk);
 			div = (in_rate + sig->pixelclock / 2) / sig->pixelclock;
