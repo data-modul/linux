@@ -11,7 +11,6 @@
  *
  * Copyright (C) 2010, Guennadi Liakhovetski <g.liakhovetski@gmx.de>
  */
-
 #include <linux/component.h>
 #include <linux/irq.h>
 #include <linux/delay.h>
@@ -1406,6 +1405,7 @@ static int imx_hdmi_connector_get_modes(struct drm_connector *connector)
 {
 	struct imx_hdmi *hdmi = container_of(connector, struct imx_hdmi,
 					     connector);
+	struct edid *edid;
 	int ret = 0;
 
 	if (!hdmi->ddc)
