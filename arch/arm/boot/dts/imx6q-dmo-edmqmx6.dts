@@ -67,6 +67,23 @@
 			gpio = <&gpio3 31 0>;
 			enable-active-high;
 		};
+
+		reg_5p0v: regulator@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "reg_5p0v";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+	};
+
+	backlight1: backlight {
+		compatible = "pwm-backlight";
+		gpios = <&gpio2 21 1>;
+		power-supply = <&reg_5p0v>;
 	};
 
 	gpio-leds {
@@ -132,6 +149,43 @@
 &hdmi_mux_1 {
 	status = "disabled";
 };
+
+&ldb {
+	status = "disable";
+	fsl,dual-channel;
+
+	lvds-channel@0 {
+		status = "okay";
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <24>;
+
+		display-timings {
+			native-mode = <&timing0>;
+
+			timing0: AUO-g173hw01-1920x1080 {
+				clock-frequency = <127285714>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <180>;
+				hsync-active = <1>;
+				vfront-porch = <2>;
+				vback-porch = <0>;
+				vsync-len = <50>;
+				vsync-active = <1>;
+			};
+		};
+	};
+};
+
+&backlight1 {
+	pwms = <&pwm1 0 200000>;
+	brightness-levels = <0 5 10 15 20 30 40 50 65 90 100>;
+	default-brightness-level = <7>;
+	status = "okay";
+};
+
 
 &i2c2 {
 	clock-frequency = <100000>;
