@@ -500,7 +500,7 @@ int snd_dw_hdmi_probe(struct snd_dw_hdmi **dwp, struct device *dev,
 		return -ENXIO;
 	}
 
-	ret = snd_card_create(SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
+	ret = snd_card_new(dev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
 			      THIS_MODULE, sizeof(struct snd_dw_hdmi), &card);
 	if (ret < 0)
 		return ret;
