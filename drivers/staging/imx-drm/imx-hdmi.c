@@ -1393,7 +1393,6 @@ static enum drm_connector_status imx_hdmi_connector_detect(struct drm_connector
 {
 	struct imx_hdmi *hdmi = container_of(connector, struct imx_hdmi,
 					     connector);
-	struct edid *edid;
 
 	/* free previous EDID block */
 	if (hdmi->edid) {
