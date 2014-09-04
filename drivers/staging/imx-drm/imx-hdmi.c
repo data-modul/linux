@@ -1398,6 +1398,7 @@ static enum drm_connector_status imx_hdmi_connector_detect(struct drm_connector
 	if (hdmi->edid) {
 		drm_mode_connector_update_edid_property(connector, NULL);
 		kfree(hdmi->edid);
+		hdmi->edid = NULL;
 	}
 
 	if (hdmi->ddc && drm_probe_ddc(hdmi->ddc)) {
