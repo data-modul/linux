@@ -457,8 +457,10 @@ int imx_drm_encoder_parse_of(struct drm_device *drm,
 		if (!ep)
 			break;
 
-		mask = imx_drm_find_crtc_mask(imxdrm, ep);
+		if (!of_device_is_available(ep))
+			continue;
 
+		mask = imx_drm_find_crtc_mask(imxdrm, ep);
 		/*
 		 * If we failed to find the CRTC(s) which this encoder is
 		 * supposed to be connected to, it's because the CRTC has
