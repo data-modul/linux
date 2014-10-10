@@ -1029,4 +1029,9 @@ enum {
 	HDMI_A_VIDPOLCFG_HSYNCPOL_ACTIVE_HIGH = 0x2,
 	HDMI_A_VIDPOLCFG_HSYNCPOL_ACTIVE_LOW = 0x0,
 };
+
+struct imx_hdmi;
+void imx_hdmi_set_sample_rate(struct imx_hdmi *hdmi, unsigned int rate);
+uint8_t *imx_hdmi_get_eld(struct imx_hdmi *hdmi);
+
 #endif /* __IMX_HDMI_H__ */

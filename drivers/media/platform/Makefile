@@ -22,7 +22,13 @@ obj-$(CONFIG_VIDEO_MEM2MEM_TESTDEV) += mem2mem_testdev.o
 obj-$(CONFIG_VIDEO_TI_VPE)		+= ti-vpe/
 
 obj-$(CONFIG_VIDEO_MX2_EMMAPRP)		+= mx2_emmaprp.o
-obj-$(CONFIG_VIDEO_CODA) 		+= coda.o
+obj-$(CONFIG_VIDEO_IMX_IPU_COMMON)	+= imx-ipu.o
+obj-$(CONFIG_VIDEO_IMX_IPUV3_CSI)	+= imx-ipuv3-csi.o
+obj-$(CONFIG_VIDEO_IMX_IPU_OVL)		+= imx-ipu-ovl.o
+obj-$(CONFIG_VIDEO_IMX_IPU_SCALER)	+= imx-ipu-scaler.o
+obj-$(CONFIG_VIDEO_IMX_IPU_VDIC)	+= imx-ipu-vdic.o
+obj-$(CONFIG_VIDEO_IMX_IPU_VOUT)	+= imx-ipu-vout.o
+obj-$(CONFIG_VIDEO_CODA) 		+= coda/
 
 obj-$(CONFIG_VIDEO_SH_VEU)		+= sh_veu.o
 
@@ -48,6 +54,7 @@ obj-$(CONFIG_SOC_CAMERA)		+= soc_camera/
 obj-$(CONFIG_VIDEO_RENESAS_VSP1)	+= vsp1/
 
 obj-y	+= davinci/
+obj-y	+= imx/
 
 obj-$(CONFIG_ARCH_OMAP)	+= omap/
 

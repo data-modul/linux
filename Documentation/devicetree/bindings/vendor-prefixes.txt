@@ -30,6 +30,7 @@ cavium	Cavium, Inc.
 cdns	Cadence Design Systems Inc.
 chrp	Common Hardware Reference Platform
 chunghwa	Chunghwa Picture Tubes Ltd.
+cnm	Chips&Media, Inc.
 cirrus	Cirrus Logic, Inc.
 cortina	Cortina Systems, Inc.
 crystalfontz	Crystalfontz America, Inc.

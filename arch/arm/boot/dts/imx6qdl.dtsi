@@ -317,9 +317,15 @@
 			};
 
 			vpu: vpu@02040000 {
+				compatible = "cnm,coda960";
 				reg = <0x02040000 0x3c000>;
-				interrupts = <0 3 IRQ_TYPE_LEVEL_HIGH>,
-				             <0 12 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <0 12 IRQ_TYPE_LEVEL_HIGH>,
+				             <0 3 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "bit", "jpeg";
+				clocks = <&clks 168>, <&clks 168>;
+				clock-names = "per", "ahb";
+				resets = <&src 1>;
+				iram = <&ocram>;
 			};
 
 			aipstz@0207c000 { /* AIPSTZ1 */

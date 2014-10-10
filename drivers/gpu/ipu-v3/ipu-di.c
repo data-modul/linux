@@ -23,6 +23,9 @@
 #include <video/imx-ipu-v3.h>
 #include "ipu-prv.h"
 
+#define DI_CLK_LIMIT (144*1000*1000)
+static unsigned long ipu_di_pixel_clk;
+
 struct ipu_di {
 	void __iomem *base;
 	int id;
@@ -140,6 +143,7 @@ static void ipu_di_data_wave_config(struct ipu_di *di,
 				     int access_size, int component_size)
 {
 	u32 reg;
+
 	reg = (access_size << DI_DW_GEN_ACCESS_SIZE_OFFSET) |
 	    (component_size << DI_DW_GEN_COMPONENT_SIZE_OFFSET);
 	ipu_di_write(di, reg, DI_DW_GEN(wave_gen));
@@ -472,8 +476,14 @@ static void ipu_di_config_clock(struct ipu_di *di,
 			unsigned div;
 
 			clk = di->clk_di;
+			dev_dbg(di->ipu->dev, "Using DI clock: %lu\n",
+				sig->pixelclock);
 
-			clk_set_rate(clk, sig->pixelclock);
+			clk = di->clk_di;
+			if (ipu_di_pixel_clk && sig->pixelclock > DI_CLK_LIMIT)
+				clk_set_rate(clk, ipu_di_pixel_clk);
+			else
+				clk_set_rate(clk, sig->pixelclock);
 
 			in_rate = clk_get_rate(clk);
 			div = (in_rate + sig->pixelclock / 2) / sig->pixelclock;
@@ -728,3 +738,13 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 void ipu_di_exit(struct ipu_soc *ipu, int id)
 {
 }
+
+static int __init ipu_clk_di_setup(char *options)
+{
+	if (kstrtoul(options, 0, &ipu_di_pixel_clk))
+		return -EINVAL;
+
+	return 0;
+}
+
+__setup("ipu_clk_di=", ipu_clk_di_setup);

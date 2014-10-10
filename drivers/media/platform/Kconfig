@@ -33,6 +33,8 @@ source "drivers/media/platform/omap/Kconfig"
 
 source "drivers/media/platform/blackfin/Kconfig"
 
+source "drivers/media/platform/imx/Kconfig"
+
 config VIDEO_SH_VOU
 	tristate "SuperH VOU video output driver"
 	depends on MEDIA_CAMERA_SUPPORT
@@ -117,6 +119,15 @@ config VIDEO_S3C_CAMIF
 	  To compile this driver as a module, choose M here: the module
 	  will be called s3c-camif.
 
+config VIDEO_IMX_IPUV3_CSI
+	tristate "i.MX51/53 Camera Sensor Interface driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3 && MEDIA_CONTROLLER
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	select VIDEO_IMX_IPUV3
+	---help---
+	  This is a v4l2 driver for the i.MX51/53 Camera Sensor Interface
+
 source "drivers/media/platform/soc_camera/Kconfig"
 source "drivers/media/platform/exynos4-is/Kconfig"
 source "drivers/media/platform/s5p-tv/Kconfig"
@@ -142,6 +153,7 @@ config VIDEO_CODA
 	select SRAM
 	select VIDEOBUF2_DMA_CONTIG
 	select V4L2_MEM2MEM_DEV
+	select GENERIC_ALLOCATOR
 	---help---
 	   Coda is a range of video codec IPs that supports
 	   H.264, MPEG-4, and other video formats.
@@ -189,6 +201,46 @@ config VIDEO_MX2_EMMAPRP
 	    MX2X chips have a PrP that can be used to process buffers from
 	    memory to memory. Operations include resizing and format
 	    conversion.
+
+config VIDEO_IMX_IPU_COMMON
+	tristate
+
+config VIDEO_IMX_IPU_OVL
+	tristate "i.MX51/53 IPUv3 based overlay driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3
+	select V4L2_MEM2MEM_DEV
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	---help---
+	  This is a v4l2 overlay video driver for the i.MX51/53.
+
+config VIDEO_IMX_IPU_VOUT
+	tristate "i.MX51/53 IPUv3 based video output driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3
+	select V4L2_MEM2MEM_DEV
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	---help---
+	  This is a v4l2 video output driver rendering on the base framebuffer
+	  of the IPUV3.
+
+config VIDEO_IMX_IPU_SCALER
+	tristate "i.MX51/53 IPUv3 based image scaler driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	select V4L2_MEM2MEM_DEV
+	---help---
+	  This is a v4l2 scaler video driver for the i.MX51/53.
+
+config VIDEO_IMX_IPU_VDIC
+	tristate "i.MX51/53 IPUv3 based deinterlacer driver"
+	depends on VIDEO_DEV && DRM_IMX_IPUV3
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEO_IMX_IPU_COMMON
+	select V4L2_MEM2MEM_DEV
+	---help---
+	  This is a v4l2 deinterlacer video driver for the i.MX51/53.
 
 config VIDEO_SAMSUNG_EXYNOS_GSC
 	tristate "Samsung Exynos G-Scaler driver"

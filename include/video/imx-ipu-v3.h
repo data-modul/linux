@@ -162,6 +162,8 @@ void ipu_dp_disable_channel(struct ipu_dp *dp);
 void ipu_dp_disable(struct ipu_soc *ipu);
 int ipu_dp_setup_channel(struct ipu_dp *dp,
 		enum ipu_color_space in, enum ipu_color_space out);
+int ipu_dp_get_channel(struct ipu_dp *dp,
+		enum ipu_color_space *in, enum ipu_color_space *out);
 int ipu_dp_set_window_pos(struct ipu_dp *, u16 x_pos, u16 y_pos);
 int ipu_dp_set_global_alpha(struct ipu_dp *dp, bool enable, u8 alpha,
 		bool bg_chan);
@@ -273,6 +275,15 @@ static inline void ipu_cpmem_set_buffer(struct ipu_ch_param __iomem *p,
 		ipu_ch_param_write_field(p, IPU_FIELD_EBA0, buf >> 3);
 }
 
+static inline dma_addr_t ipu_cpmem_get_buffer(struct ipu_ch_param __iomem *p,
+		int bufnum)
+{
+	if (bufnum)
+		return ipu_ch_param_read_field(p, IPU_FIELD_EBA1) << 3;
+	else
+		return ipu_ch_param_read_field(p, IPU_FIELD_EBA0) << 3;
+}
+
 static inline void ipu_cpmem_set_resolution(struct ipu_ch_param __iomem *p,
 		int xres, int yres)
 {
@@ -343,5 +354,11 @@ struct ipu_client_platformdata {
 	int dmfc;
 	int dma[2];
 };
+
+int ipu_image_convert(struct ipu_soc *ipu, struct ipu_image *in, struct ipu_image *out,
+		void (*complete)(void *ctx, int err), void *ctx);
+int ipu_image_deinterlace_convert(struct ipu_soc *ipu, struct ipu_image *in_p,
+		struct ipu_image *in, struct ipu_image *in_n, struct ipu_image *out,
+		void (*complete)(void *ctx, int err), void *complete_context);
 
 #endif /* __DRM_IPU_H__ */

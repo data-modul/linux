@@ -1,0 +1,19 @@
+config MEDIA_IMX
+	tristate "Multimedia Support for Freescale i.MX"
+	help
+	  This driver provides a SoC wide media controller device that all
+	  multimedia components in i.MX5 and i.MX6 SoCs can register with.
+
+config MEDIA_IMX_IPU
+	tristate "i.MX Image Processing Unit (v3) core driver"
+	help
+	  This driver provides core support for the i.MX IPUv3 contained in
+	  i.MX5 and i.MX6 SoCs.
+
+config MEDIA_IMX_VIDEO_SWITCH
+	tristate "i.MX Video Bus Multiplexer"
+	depends on VIDEO_V4L2_SUBDEV_API
+	help
+	  This driver provides support for SoC internal video bus multiplexers
+	  controlled by register bitfields as well as external multiplexers
+	  controller by a GPIO.
