@@ -65,27 +65,35 @@ task_notify_func(struct notifier_block *self, unsigned long val, void *data)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-#include <mach/viv_gpu.h>
+# include <mach/viv_gpu.h>
 #else
-#include <linux/pm_runtime.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-#include <mach/busfreq.h>
-#else
-#include <linux/busfreq-imx6.h>
-#include <linux/reset.h>
-#endif
+# include <linux/pm_runtime.h>
+# if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#  include <mach/busfreq.h>
+# elif LINUX_VERSION_CODE > KERNEL_VERSION(3,16,0)
+#  include <linux/reset.h>
+# else
+#  include <linux/busfreq-imx6.h>
+#  include <linux/reset.h>
+# endif
 #endif
 /* Zone used for header/footer. */
 #define _GC_OBJ_ZONE    gcvZONE_DRIVER
 
 #if gcdENABLE_FSCALE_VAL_ADJUST
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0))
 #include <linux/device_cooling.h>
 #define REG_THERMAL_NOTIFIER(a) register_devfreq_cooling_notifier(a);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_devfreq_cooling_notifier(a);
 #else
-extern int register_thermal_notifier(struct notifier_block *nb);
-extern int unregister_thermal_notifier(struct notifier_block *nb);
+static inline int register_thermal_notifier(struct notifier_block *nb)
+{
+	return 0;
+}
+static inline int unregister_thermal_notifier(struct notifier_block *nb)
+{
+	return 0;
+}
 #define REG_THERMAL_NOTIFIER(a) register_thermal_notifier(a);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_thermal_notifier(a);
 #endif
@@ -1329,7 +1337,7 @@ MODULE_DEVICE_TABLE(of, mxs_gpu_dt_ids);
 #ifdef CONFIG_PM
 static int gpu_runtime_suspend(struct device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 7)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 7)) && (LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0))
 	release_bus_freq(BUS_FREQ_HIGH);
 #endif
 	return 0;
@@ -1337,7 +1345,7 @@ static int gpu_runtime_suspend(struct device *dev)
 
 static int gpu_runtime_resume(struct device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 7)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 7) && LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 	request_bus_freq(BUS_FREQ_HIGH);
 #endif
 	return 0;

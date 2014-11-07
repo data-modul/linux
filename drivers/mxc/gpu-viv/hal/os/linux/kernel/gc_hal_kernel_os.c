@@ -7656,7 +7656,11 @@ gckOS_Signal(
     else
     {
         /* Set the event to an unsignaled state. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
         INIT_COMPLETION(signal->obj);
+#else
+	reinit_completion(&signal->obj);
+#endif
     }
 
     gcmkVERIFY_OK(gckOS_ReleaseMutex(Os, Os->signalMutex));
