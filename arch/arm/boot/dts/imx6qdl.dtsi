@@ -31,8 +31,8 @@
 		i2c2 = &i2c3;
 		mmc0 = &usdhc1;
 		mmc1 = &usdhc2;
-		mmc2 = &usdhc3;
-		mmc3 = &usdhc4;
+		mmc2 = &usdhc4;
+		mmc3 = &usdhc3;
 		serial0 = &uart1;
 		serial1 = &uart2;
 		serial2 = &uart3;
@@ -875,21 +875,21 @@
 				status = "disabled";
 			};
 
-			usdhc3: usdhc@02198000 {
-				compatible = "fsl,imx6q-usdhc";
-				reg = <0x02198000 0x4000>;
-				interrupts = <0 24 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&clks 165>, <&clks 165>, <&clks 165>;
-				clock-names = "ipg", "ahb", "per";
-				bus-width = <4>;
-				status = "disabled";
-			};
-
 			usdhc4: usdhc@0219c000 {
 				compatible = "fsl,imx6q-usdhc";
 				reg = <0x0219c000 0x4000>;
 				interrupts = <0 25 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks 166>, <&clks 166>, <&clks 166>;
+				clock-names = "ipg", "ahb", "per";
+				bus-width = <4>;
+				status = "disabled";
+			};
+
+			usdhc3: usdhc@02198000 {
+				compatible = "fsl,imx6q-usdhc";
+				reg = <0x02198000 0x4000>;
+				interrupts = <0 24 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clks 165>, <&clks 165>, <&clks 165>;
 				clock-names = "ipg", "ahb", "per";
 				bus-width = <4>;
 				status = "disabled";
