@@ -82,7 +82,7 @@
 
 	backlight1: backlight {
 		compatible = "pwm-backlight";
-		gpios = <&gpio2 21 1>;
+		enable-gpios = <&gpio2 21 GPIO_ACTIVE_HIGH>;
 		power-supply = <&reg_5p0v>;
 	};
 
@@ -155,14 +155,6 @@
 &hdmi_mux_1 {
 	status = "disabled";
 };
-
-&backlight1 {
-	pwms = <&pwm1 0 200000>;
-	brightness-levels = <0 5 10 15 20 30 40 50 65 90 100>;
-	default-brightness-level = <7>;
-	status = "okay";
-};
-
 
 &i2c1 {
 	clock-frequency = <100000>;
@@ -416,6 +408,12 @@
 				MX6QDL_PAD_EIM_D20__GPIO3_IO20		0x80000000
 			>;
 		};
+		
+		pinctrl_pwm: pwmgrp1 {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_9__PWM1_OUT		0x1b0b0
+			>;
+		};
 
 		pinctrl_stmpe1: stmpe1grp {
 			fsl,pins = <MX6QDL_PAD_EIM_D30__GPIO3_IO30 0x80000000>;
@@ -477,6 +475,12 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcie>;
 	reset-gpio = <&gpio4 8 0>;
+	status = "okay";
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm>;
 	status = "okay";
 };
 
