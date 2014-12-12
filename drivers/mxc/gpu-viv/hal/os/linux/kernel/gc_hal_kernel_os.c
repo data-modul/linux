@@ -3041,7 +3041,7 @@ gckOS_UnmapPhysical(
 **          Pointer to a variable that will hold a pointer to the mutex.
 */
 gceSTATUS
-gckOS_CreateMutex(
+gckOS_AllocMutex(
     IN gckOS Os,
     OUT gctPOINTER * Mutex
     )
@@ -3056,9 +3056,6 @@ gckOS_CreateMutex(
 
     /* Allocate the mutex structure. */
     gcmkONERROR(gckOS_Allocate(Os, gcmSIZEOF(struct mutex), Mutex));
-
-    /* Initialize the mutex. */
-    mutex_init(*Mutex);
 
     /* Return status. */
     gcmkFOOTER_ARG("*Mutex=0x%X", *Mutex);

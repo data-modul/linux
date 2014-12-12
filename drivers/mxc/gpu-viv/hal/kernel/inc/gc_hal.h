@@ -31,6 +31,7 @@
 #ifndef VIVANTE_NO_3D
 #include "gc_hal_statistics.h"
 #endif
+#include <linux/mutex.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -576,10 +577,20 @@ gckOS_UnmapUserLogical(
 
 /* Create a new mutex. */
 gceSTATUS
-gckOS_CreateMutex(
+gckOS_AllocMutex(
     IN gckOS Os,
     OUT gctPOINTER * Mutex
     );
+
+#define gckOS_CreateMutex(Os, Mutex)				\
+({	gceSTATUS __ret;					\
+	__ret = gckOS_AllocMutex(Os, Mutex);			\
+	if (__ret == gcvSTATUS_OK) {				\
+		/* Initialize the mutex. */			\
+		mutex_init(*Mutex);				\
+	}							\
+	__ret;							\
+})
 
 /* Delete a mutex. */
 gceSTATUS
