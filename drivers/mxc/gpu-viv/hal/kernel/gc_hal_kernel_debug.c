@@ -1717,6 +1717,9 @@ _Print(
     gcsBUFFERED_OUTPUT_PTR outputBuffer;
     gcmkDECLARE_LOCK(lockHandle);
 
+    if (in_interrupt())
+		return;
+
     gcmkLOCKSECTION(lockHandle);
 
     /* Initialize output buffer list. */
