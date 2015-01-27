@@ -185,6 +185,8 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6dl-cubox-i.dtb \
 	imx6dl-dfi-fs700-m60.dtb \
 	imx6dl-dmo-edmqmx6.dtb \
+	imx6dl-dmo-edmqmx6-chimei-g070y2.dtb \
+	imx6dl-dmo-edmqmx6-auo-g173hw01.dtb \
 	imx6dl-gw51xx.dtb \
 	imx6dl-gw52xx.dtb \
 	imx6dl-gw53xx.dtb \

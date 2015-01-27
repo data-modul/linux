@@ -1,0 +1,48 @@
+/*
+ * Copyright 2011 Freescale Semiconductor, Inc.
+ * Copyright 2011 Linaro Ltd.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+#include "imx6q-dmo-edmqmx6.dts"
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <24>;
+
+		display-timings {
+			native-mode = <&timing0>;
+
+			timing0: Chimei-g070y2-L01-800x480 {
+				clock-frequency = <28285712>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <10>;
+				hback-porch = <10>;
+				hsync-len = <130>;
+				hsync-active = <1>;
+				vfront-porch = <5>;
+				vback-porch = <5>;
+				vsync-len = <10>;
+				vsync-active = <1>;
+			};
+		};
+	};
+};
+
+&backlight1 {
+	pwms = <&pwm1 0 5000000>;
+	brightness-levels = <0 5 10 15 20 30 40 50 65 90 100>;
+	default-brightness-level = <7>;
+	status = "okay";
+};
