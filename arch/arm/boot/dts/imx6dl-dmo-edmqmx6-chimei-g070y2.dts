@@ -10,7 +10,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "imx6q-dmo-edmqmx6.dts"
+#include "imx6dl-dmo-edmqmx6.dts"
 
 &ldb {
 	status = "okay";
