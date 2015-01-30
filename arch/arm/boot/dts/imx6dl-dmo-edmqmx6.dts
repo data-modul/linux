@@ -85,6 +85,16 @@
 			gpio = <&gpio3 31 0>;
 			enable-active-high;
 		};
+
+		reg_5p0v: regulator@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "reg_5p0v";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
 	};
 
 	gpio-leds {
