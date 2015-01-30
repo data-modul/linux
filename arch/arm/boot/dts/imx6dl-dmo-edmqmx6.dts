@@ -97,6 +97,12 @@
 		};
 	};
 
+	backlight1: backlight {
+		compatible = "pwm-backlight";
+		enable-gpios = <&gpio2 21 GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_5p0v>;
+	};
+
 	gpio-leds {
 		compatible = "gpio-leds";
 
