@@ -85,6 +85,22 @@
 			gpio = <&gpio3 31 0>;
 			enable-active-high;
 		};
+
+		reg_5p0v: regulator@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "reg_5p0v";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+	};
+
+	backlight1: backlight {
+		compatible = "pwm-backlight";
+		enable-gpios = <&gpio2 21 GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_5p0v>;
 	};
 
 	gpio-leds {
