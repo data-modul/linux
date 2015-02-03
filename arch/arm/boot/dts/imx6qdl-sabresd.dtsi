@@ -128,6 +128,12 @@
 	status = "okay";
 };
 
+&cpu0 {
+	arm-supply = <&sw1a_reg>;
+	soc-supply = <&sw1c_reg>;
+	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
+};
+
 &ecspi1 {
 	fsl,spi-num-chipselects = <1>;
 	cs-gpios = <&gpio4 9 0>;
@@ -150,6 +156,10 @@
 	phy-mode = "rgmii";
 	phy-reset-gpios = <&gpio1 25 0>;
 	status = "okay";
+};
+
+&gpu {
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
 };
 
 &hdmi {
@@ -560,4 +570,8 @@
 	non-removable;
 	no-1-8-v;
 	status = "okay";
+};
+
+&vpu {
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
 };
