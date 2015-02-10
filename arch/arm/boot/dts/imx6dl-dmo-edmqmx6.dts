@@ -164,6 +164,12 @@
 	status = "okay";
 };
 
+&hdmi {
+	status = "okay";
+	hpd-unreliable;
+	ddc-i2c-bus = <&i2c3>;
+};
+
 &i2c1 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
