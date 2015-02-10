@@ -435,12 +435,25 @@
 				MX6QDL_PAD_EIM_D20__GPIO3_IO20 0x198c0
 			>;
 		};
+
+		pinctrl_pwm: pwmgrp1 {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_9__PWM1_OUT		0x1b0b0
+			>;
+		};
+
 	};
 };
 
 &uart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
+	status = "okay";
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm>;
 	status = "okay";
 };
 
