@@ -155,12 +155,31 @@
 	};
 };
 
+&can1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can1>;
+	status = "okay";
+};
+
 &fec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii";
 	phy-reset-gpios = <&gpio3 23 0>;
 	phy-supply = <&vgen2_1v2_eth>;
+	status = "okay";
+};
+
+&hdmi {
+	status = "okay";
+	hpd-unreliable;
+	ddc-i2c-bus = <&i2c3>;
+};
+
+&i2c1 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c1>;
 	status = "okay";
 };
 
@@ -316,6 +335,13 @@
 	};
 };
 
+&i2c3 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c3>;
+	status = "okay";
+};
+
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
@@ -325,6 +351,13 @@
 			fsl,pins = <
 				MX6QDL_PAD_EIM_A16__GPIO2_IO22 0x80000000
 				MX6QDL_PAD_EIM_A17__GPIO2_IO21 0x80000000
+			>;
+		};
+
+		pinctrl_can1: can1grp {
+			fsl,pins = <
+				MX6QDL_PAD_KEY_ROW2__FLEXCAN1_RX	0x1b0b0
+				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX		0x1b0b0
 			>;
 		};
 
@@ -358,10 +391,24 @@
 			>;
 		};
 
+		pinctrl_i2c1: i2c1grp {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_D21__I2C1_SCL		0x4001b8b1
+				MX6QDL_PAD_EIM_D28__I2C1_SDA		0x4001b8b1
+			>;
+		};
+
 		pinctrl_i2c2: i2c2grp {
 			fsl,pins = <
 				MX6QDL_PAD_EIM_EB2__I2C2_SCL		0x4001b8b1
 				MX6QDL_PAD_KEY_ROW3__I2C2_SDA		0x4001b8b1
+			>;
+		};
+
+		pinctrl_i2c3: i2c3grp {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_D17__I2C3_SCL		0x4001b8b1
+				MX6QDL_PAD_GPIO_6__I2C3_SDA		0x4001b8b1
 			>;
 		};
 
@@ -390,6 +437,17 @@
 		pinctrl_usbotg: usbotggrp {
 			fsl,pins = <
 				MX6QDL_PAD_ENET_RX_ER__USB_OTG_ID	0x17059
+			>;
+		};
+
+		pinctrl_usdhc1: usdhc1grp {
+			fsl,pins = <
+				MX6QDL_PAD_SD1_CMD__SD1_CMD		0x17059
+				MX6QDL_PAD_SD1_CLK__SD1_CLK		0x10059
+				MX6QDL_PAD_SD1_DAT0__SD1_DATA0		0x17059
+				MX6QDL_PAD_SD1_DAT1__SD1_DATA1		0x17059
+				MX6QDL_PAD_SD1_DAT2__SD1_DATA2		0x17059
+				MX6QDL_PAD_SD1_DAT3__SD1_DATA3		0x17059
 			>;
 		};
 
@@ -424,12 +482,38 @@
 				MX6QDL_PAD_EIM_D20__GPIO3_IO20 0x198c0
 			>;
 		};
+
+		pinctrl_pwm: pwmgrp1 {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_9__PWM1_OUT		0x1b0b0
+			>;
+		};
+
+		pinctrl_pcie: pciegrp {
+			fsl,pins = <
+				MX6QDL_PAD_KEY_COL1__GPIO4_IO08		0x100b1
+			>;
+		};
+
 	};
 };
 
 &uart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
+	status = "okay";
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie>;
+	reset-gpio = <&gpio4 8 0>;
+	status = "okay";
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm>;
 	status = "okay";
 };
 
@@ -458,18 +542,6 @@
 	pinctrl-0 = <&pinctrl_usdhc3>;
 	vmmc-supply = <&reg_3p3v>;
 	status = "okay";
-
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	partition@0 {
-		label = "barebox";
-		reg = <0x0 0x80000>;
-	};
-	partition@1 {
-		label = "barebox-environment";
-		reg = <0x80000 0x80000>;
-	};
 };
 
 &usdhc4 {
@@ -479,16 +551,11 @@
 	non-removable;
 	bus-width = <8>;
 	status = "okay";
+};
 
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	partition@0 {
-		label = "barebox";
-		reg = <0x0 0x80000>;
-	};
-	partition@1 {
-		label = "barebox-environment";
-		reg = <0x80000 0x80000>;
-	};
+&usdhc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	vmmc-supply = <&reg_3p3v>;
+	status = "okay";
 };

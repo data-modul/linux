@@ -859,16 +859,6 @@
 					     <0 126 IRQ_TYPE_LEVEL_HIGH>;
 			};
 
-			usdhc1: usdhc@02190000 {
-				compatible = "fsl,imx6q-usdhc";
-				reg = <0x02190000 0x4000>;
-				interrupts = <0 22 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&clks 163>, <&clks 163>, <&clks 163>;
-				clock-names = "ipg", "ahb", "per";
-				bus-width = <4>;
-				status = "disabled";
-			};
-
 			usdhc2: usdhc@02194000 {
 				compatible = "fsl,imx6q-usdhc";
 				reg = <0x02194000 0x4000>;
@@ -894,6 +884,16 @@
 				reg = <0x02198000 0x4000>;
 				interrupts = <0 24 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks 165>, <&clks 165>, <&clks 165>;
+				clock-names = "ipg", "ahb", "per";
+				bus-width = <4>;
+				status = "disabled";
+			};
+
+			usdhc1: usdhc@02190000 {
+				compatible = "fsl,imx6q-usdhc";
+				reg = <0x02190000 0x4000>;
+				interrupts = <0 22 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clks 163>, <&clks 163>, <&clks 163>;
 				clock-names = "ipg", "ahb", "per";
 				bus-width = <4>;
 				status = "disabled";
